@@ -1,0 +1,48 @@
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --font-size: 14px;
+  --tux-black: #000000;
+  --tux-white: #FFFFFF;
+  --tux-gold: #D4AF37;
+  --tux-gold-light: #F4E4BE;
+  --tux-gold-dark: #B8962A;
+  --background: #ffffff;
+  --foreground: oklch(0.145 0 0);
+  --border: rgba(0, 0, 0, 0.1);
+  --input: transparent;
+  --ring: oklch(0.708 0 0);
+  --radius: 0.625rem;
+}
+
+.dark {
+  --background: #111827;
+  --foreground: #ffffff;
+  --border: oklch(0.269 0 0);
+  --input: oklch(0.269 0 0);
+  --ring: oklch(0.439 0 0);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    font-size: var(--font-size);
+  }
+}
