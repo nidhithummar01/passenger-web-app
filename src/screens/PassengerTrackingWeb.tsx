@@ -4,7 +4,7 @@ import { GlassCard, GoldButton } from '../components/GlassCard';
 import {
   MapPin, Car, Navigation,
   CreditCard, DollarSign, CheckCircle2, Gift, Lock, Sparkles,
-  User, Crown, Wallet, ArrowRight, ArrowLeft, Apple, Calendar
+  User, Crown, Wallet, ArrowRight, ArrowLeft, Apple
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
@@ -31,7 +31,7 @@ export const PassengerTrackingWeb = () => {
   const { user, setActiveRide } = useApp();
 
   const deepLinkPickup = searchParams.get('pickup') || '';
-  const [step, setStep] = useState<'config' | 'payment' | 'tracking'>('config');
+  const [step, setStep] = useState<'config' | 'payment' | 'secure-payment' | 'tracking'>('config');
   const [dropOffLocation, setDropOffLocation] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
   const [showPromo, setShowPromo] = useState(false);
@@ -61,6 +61,7 @@ export const PassengerTrackingWeb = () => {
 
   const handleBackNavigation = () => {
     if (step === 'tracking') { setStep('payment'); return; }
+    if (step === 'secure-payment') { setStep('payment'); return; }
     if (step === 'payment') { setStep('config'); return; }
     navigate(-1);
   };
@@ -70,19 +71,18 @@ export const PassengerTrackingWeb = () => {
     setStep('payment');
   };
 
+
   const handlePaymentSelection = (method: string) => {
     setPaymentMethod(method);
-    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: method, status: 'tracking' }));
-    navigate('/tuxedo-landing', { state: { paymentMethod: method } });
+    setStep('secure-payment');
   };
 
-  const proceedToTracking = () => {
-    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: null, status: 'tracking' }));
-    setShowPromo(false);
-    // Show popup after payment step completion
+  const handleSecurePaymentConfirm = () => {
+    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod, status: 'tracking' }));
     setShowAppPopup(true);
     setStep('tracking');
   };
+
 
   return (
     <div className="min-h-screen bg-black p-4 font-sans text-white flex flex-col">
@@ -104,7 +104,7 @@ export const PassengerTrackingWeb = () => {
           {step === 'config' && (
             <motion.div key="config" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
               <GlassCard className="p-6 border-[#D4AF37]/20">
-                <h2 className="text-xl font-bold mb-4 uppercase italic">Finalize Your Journey</h2>
+                <h2 className="text-xl font-bold mb-4 uppercase italic">Start Your Journey</h2>
                 <div className="space-y-4">
                   <div className="p-4 bg-[#D4AF37]/10 rounded-xl border-2 border-[#D4AF37]/40">
                     <p className="text-[10px] text-[#D4AF37] uppercase font-black mb-1">Pickup Location</p>
@@ -118,14 +118,7 @@ export const PassengerTrackingWeb = () => {
                   <GoldButton onClick={handleRequestChauffeur} className="w-full py-5 text-xl uppercase font-black" disabled={!dropOffLocation}>
                     Request Chauffeur
                   </GoldButton>
-                  {/* Reserve a Ride button */}
-                  <button
-                    onClick={() => navigate('/reserve-ride', { state: { pickupLocation } })}
-                    className="w-full flex items-center justify-center gap-3 py-4 rounded-xl border-2 border-[#D4AF37]/40 text-[#D4AF37] font-black uppercase text-sm hover:bg-[#D4AF37]/10 transition-all"
-                  >
-                    <Calendar className="w-5 h-5" />
-                    Reserve a Ride
-                  </button>
+
                 </div>
               </GlassCard>
             </motion.div>
@@ -150,9 +143,50 @@ export const PassengerTrackingWeb = () => {
                     );
                   })}
                 </div>
-                <div className="mt-8">
-                  <GoldButton onClick={proceedToTracking} className="w-full py-4 text-base uppercase font-black">Proceed to Tracking</GoldButton>
-                  <p className="text-[10px] text-gray-500 text-center mt-4 font-bold uppercase tracking-widest">You can also pay inside the vehicle</p>
+              </GlassCard>
+            </motion.div>
+          )}
+
+          {step === 'secure-payment' && (
+            <motion.div key="secure-payment" initial={{ opacity: 0, x: 40 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -40 }}>
+              <GlassCard className="p-6 border-[#D4AF37]/30">
+                <div className="text-center mb-8">
+                  <motion.div initial={{ scale: 0.5, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ type: 'spring', stiffness: 200, damping: 15 }}>
+                    <div className="w-16 h-16 bg-[#D4AF37]/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#D4AF37]/30">
+                      <Lock className="w-8 h-8 text-[#D4AF37]" />
+                    </div>
+                  </motion.div>
+                  <h2 className="text-xl font-black text-white uppercase italic tracking-tight">Secure Payment</h2>
+                  <p className="text-xs text-gray-500 mt-1 font-bold uppercase tracking-widest">256-bit SSL Encrypted</p>
+                </div>
+
+                <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl p-5 mb-6">
+                  <p className="text-[10px] text-gray-500 font-black uppercase tracking-widest mb-1">Payment Method</p>
+                  <p className="text-lg font-black text-white">{paymentMethod}</p>
+                </div>
+
+                <div className="space-y-3 mb-6">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400 font-medium">Ride Fare</span>
+                    <span className="text-white font-bold">$24.00</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-400 font-medium">Service Fee</span>
+                    <span className="text-white font-bold">$3.00</span>
+                  </div>
+                  <div className="border-t border-white/10 pt-3 flex justify-between">
+                    <span className="text-white font-black uppercase text-sm">Total</span>
+                    <span className="text-[#D4AF37] font-black text-lg">$27.00</span>
+                  </div>
+                </div>
+
+                <GoldButton onClick={handleSecurePaymentConfirm} className="w-full py-5 text-base font-black uppercase">
+                  Confirm Payment
+                </GoldButton>
+
+                <div className="flex items-center justify-center gap-2 mt-4">
+                  <Lock className="w-3 h-3 text-gray-600" />
+                  <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">Secured by Tuxedo Financial</p>
                 </div>
               </GlassCard>
             </motion.div>
@@ -240,23 +274,40 @@ export const PassengerTrackingWeb = () => {
 };
 
 const AppDownloadPopup = ({ user, onClose }: { user: AppUser | null; onClose: () => void }) => {
+  const navigate = useNavigate();
   const handleDownloadApp = () => {
     const token = Math.random().toString(36).slice(2, 8).toUpperCase();
     localStorage.setItem('pendingAppDownloadCoupon', JSON.stringify({ code: `TUX100-${token}`, amount: 100, linkedIdentity: { phone: user?.phone || null, email: user?.email || null }, status: 'pending_app_login', issuedAt: new Date().toISOString() }));
     window.open('https://apps.apple.com', '_blank');
     onClose();
   };
+  const handleBuyMembership = () => {
+    onClose();
+    navigate('/membership');
+  };
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
       <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-sm">
         <GlassCard className="p-8 text-center border-[#D4AF37]/40 shadow-2xl shadow-[#D4AF37]/30">
-          <div className="w-16 h-16 bg-[#D4AF37]/20 rounded-2xl flex items-center justify-center mx-auto mb-6 border border-[#D4AF37]/30">
-            <Sparkles className="w-8 h-8 text-[#D4AF37]" />
+          <div className="w-16 h-16 bg-[#D4AF37]/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#D4AF37]/30">
+            <Gift className="w-8 h-8 text-[#D4AF37]" />
           </div>
-          <h3 className="text-xl font-bold text-white mb-6 leading-tight">Download our app and get <span className="text-[#D4AF37]">$100 coupon free</span> on your next ride.</h3>
+          <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest mb-2">Exclusive Offer</p>
+          <h3 className="text-xl font-black text-white mb-2 leading-tight uppercase italic">FREE $100 Coupon</h3>
+          <p className="text-sm text-gray-400 font-medium mb-8">Download our app or buy a membership and get <span className="text-[#D4AF37] font-bold">$100 free</span> on your next ride.</p>
           <div className="space-y-3">
-            <GoldButton onClick={handleDownloadApp} className="w-full py-4 text-base font-black uppercase">Download App</GoldButton>
-            <button onClick={onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">Skip for Now</button>
+            <GoldButton onClick={handleDownloadApp} className="w-full py-4 text-base font-black uppercase">
+              Download App
+            </GoldButton>
+            <button
+              onClick={handleBuyMembership}
+              className="w-full py-4 rounded-xl border-2 border-[#D4AF37]/40 text-[#D4AF37] font-black text-sm uppercase tracking-widest hover:bg-[#D4AF37]/10 transition-all"
+            >
+              Buy Membership
+            </button>
+            <button onClick={onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
+              Skip for Now
+            </button>
           </div>
         </GlassCard>
       </motion.div>

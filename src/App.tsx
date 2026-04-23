@@ -4,7 +4,6 @@ import { PassengerTrackingWeb } from './screens/PassengerTrackingWeb';
 import { MembershipScreen } from './screens/MembershipScreen';
 import { MembershipPaymentScreen } from './screens/MembershipPaymentScreen';
 import { ReserveRideScreen } from './screens/ReserveRideScreen';
-import { TuxedoLandingScreen } from './screens/TuxedoLandingScreen';
 import { DriverListScreen } from './screens/DriverListScreen';
 import { DriverProfileScreen } from './screens/DriverProfileScreen';
 
@@ -19,7 +18,6 @@ export default function App() {
             <Route path="/membership" element={<MembershipScreen />} />
             <Route path="/membership-payment" element={<MembershipPaymentScreen />} />
             <Route path="/reserve-ride" element={<ReserveRideScreen />} />
-            <Route path="/tuxedo-landing" element={<TuxedoLandingScreen />} />
             <Route path="/driver-list" element={<DriverListScreen />} />
             <Route path="/driver-profile" element={<DriverProfileScreen />} />
             <Route path="*" element={<Navigate to="/track-ride" replace />} />
