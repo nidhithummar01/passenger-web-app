@@ -88,7 +88,7 @@ export const PassengerTrackingWeb = () => {
     <div className="min-h-screen bg-black p-4 font-sans text-white flex flex-col">
       <div className="max-w-md mx-auto w-full space-y-6 pt-8 flex-grow">
         <div className="mb-8">
-          <button onClick={handleBackNavigation} className="mb-4 text-base text-[#D4AF37] hover:text-[#B8962A] flex items-center gap-2 font-semibold">
+          <button onClick={handleBackNavigation} className={`mb-4 text-base text-[#D4AF37] hover:text-[#B8962A] flex items-center gap-2 font-semibold ${step === 'config' ? 'invisible' : ''}`}>
             <ArrowLeft className="w-5 h-5" /> Back
           </button>
           <div className="text-center">
