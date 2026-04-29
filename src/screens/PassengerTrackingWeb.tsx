@@ -51,7 +51,22 @@ export const PassengerTrackingWeb = () => {
     setStep('tracking');
     setHasPremiumAmenities(membershipPurchased);
     setShowPromo(membershipPurchased);
-    // Show popup after payment completion
+    if (state.selectedDriver) {
+      const d = state.selectedDriver;
+      const amenities: string[] = [];
+      if (d.amenities?.wifi) amenities.push('WiFi');
+      if (d.amenities?.water) amenities.push('Refreshments');
+      if (d.amenities?.music) amenities.push('Audio');
+      if (d.amenities?.charger) amenities.push('Charger');
+      if (d.vehicle?.interior) amenities.push(d.vehicle.interior);
+      setAssignedDriver({
+        name: `${d.name.split(' ')[0]} ${d.name.split(' ')[1]?.[0]}.`,
+        rating: String(d.rating),
+        vehicle: `${d.vehicle?.color} ${d.vehicle?.model}`,
+        amenities,
+      });
+    }
+    setPopupSkippedOnce(false);
     setShowAppPopup(true);
     setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: selectedPaymentMethod, status: 'tracking' }));
     navigate(location.pathname, { replace: true, state: null });
