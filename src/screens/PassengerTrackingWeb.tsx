@@ -37,6 +37,7 @@ export const PassengerTrackingWeb = () => {
   const [showPromo, setShowPromo] = useState(false);
   // Popup only shown after payment completion
   const [showAppPopup, setShowAppPopup] = useState(false);
+  const [popupSkippedOnce, setPopupSkippedOnce] = useState(false);
   const isMemberFlag = localStorage.getItem('isMember') === 'true';
   const [hasPremiumAmenities, setHasPremiumAmenities] = useState<boolean>(isMemberFlag || user?.isMember === true);
   const [assignedDriver, setAssignedDriver] = useState<TrackingDriverDisplay>(DEFAULT_ASSIGNED);
@@ -78,6 +79,9 @@ export const PassengerTrackingWeb = () => {
   };
 
   const handleSecurePaymentConfirm = () => {
+    const memberStatus = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
+    setHasPremiumAmenities(memberStatus);
+    setPopupSkippedOnce(false);
     setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod, status: 'tracking' }));
     setShowAppPopup(true);
     setStep('tracking');
@@ -184,10 +188,7 @@ export const PassengerTrackingWeb = () => {
                   Confirm Payment
                 </GoldButton>
 
-                <div className="flex items-center justify-center gap-2 mt-4">
-                  <Lock className="w-3 h-3 text-gray-600" />
-                  <p className="text-[10px] text-gray-600 font-bold uppercase tracking-widest">Secured by Tuxedo Financial</p>
-                </div>
+
               </GlassCard>
             </motion.div>
           )}
@@ -245,7 +246,19 @@ export const PassengerTrackingWeb = () => {
         </AnimatePresence>
 
         <AnimatePresence>
-          {showAppPopup && (<AppDownloadPopup user={user} onClose={() => setShowAppPopup(false)} />)}
+          {showAppPopup && (
+            <AppDownloadPopup
+              user={user}
+              onClose={() => setShowAppPopup(false)}
+              onSkip={() => {
+                setShowAppPopup(false);
+                if (!popupSkippedOnce) {
+                  setPopupSkippedOnce(true);
+                  setTimeout(() => setShowAppPopup(true), 5000);
+                }
+              }}
+            />
+          )}
         </AnimatePresence>
       </div>
 
@@ -273,7 +286,7 @@ export const PassengerTrackingWeb = () => {
   );
 };
 
-const AppDownloadPopup = ({ user, onClose }: { user: AppUser | null; onClose: () => void }) => {
+const AppDownloadPopup = ({ user, onClose, onSkip }: { user: AppUser | null; onClose: () => void; onSkip?: () => void }) => {
   const navigate = useNavigate();
   const handleDownloadApp = () => {
     const token = Math.random().toString(36).slice(2, 8).toUpperCase();
@@ -305,7 +318,7 @@ const AppDownloadPopup = ({ user, onClose }: { user: AppUser | null; onClose: ()
             >
               Buy Membership
             </button>
-            <button onClick={onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
+            <button onClick={onSkip ?? onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
               Skip for Now
             </button>
           </div>
