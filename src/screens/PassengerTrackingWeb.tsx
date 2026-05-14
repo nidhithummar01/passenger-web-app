@@ -10,6 +10,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
 import type { User as AppUser } from '../types';
 
+const LS_HAS_INSTALLED_APP = 'tuxedoHasInstalledApp';
+const LS_PENDING_RIDE_CREDIT = 'tuxedoPendingRideCredit';
+
 type TrackingDriverDisplay = {
   name: string;
   rating: string;
@@ -21,7 +24,7 @@ const DEFAULT_ASSIGNED: TrackingDriverDisplay = {
   name: 'Michael S.',
   rating: '4.9',
   vehicle: 'Black S-Class',
-  amenities: ['WiFi', 'Refreshments', 'Leather Interior'],
+  amenities: ['Wi-Fi', 'Water', 'TV / AUX / karaoke', 'Nappa leather'],
 };
 
 export const PassengerTrackingWeb = () => {
@@ -44,40 +47,64 @@ export const PassengerTrackingWeb = () => {
   const isMemberFlag = localStorage.getItem('isMember') === 'true';
   const [hasPremiumAmenities, setHasPremiumAmenities] = useState<boolean>(isMemberFlag || user?.isMember === true);
   const [assignedDriver, setAssignedDriver] = useState<TrackingDriverDisplay>(DEFAULT_ASSIGNED);
+  const [reserveMeta, setReserveMeta] = useState<{
+    date?: string;
+    time?: string;
+    pickup?: string;
+    serviceType?: 'transfer' | 'hourly';
+  }>({});
 
   useEffect(() => {
-    const state = location.state as { fromMembershipPurchase?: boolean; fromMembershipSkip?: boolean; paymentMethod?: string; selectedDriver?: any; } | null;
-    if (!state?.fromMembershipPurchase && !state?.fromMembershipSkip) return;
-    const selectedPaymentMethod = state.paymentMethod || 'Payment Method';
-    const membershipPurchased = Boolean(state.fromMembershipPurchase);
-    setPaymentMethod(selectedPaymentMethod);
-    setStep('tracking');
-    setHasPremiumAmenities(membershipPurchased);
-    setShowPromo(membershipPurchased);
-    if (state.selectedDriver) {
-      const d = state.selectedDriver;
-      const amenities: string[] = [];
-      if (d.amenities?.wifi) amenities.push('WiFi');
-      if (d.amenities?.water) amenities.push('Refreshments');
-      if (d.amenities?.music) amenities.push('AUX');
-      if (d.amenities?.charger) amenities.push('Charger');
-      if (d.vehicle?.interior) amenities.push(d.vehicle.interior);
-      setAssignedDriver({
-        name: `${d.name.split(' ')[0]} ${d.name.split(' ')[1]?.[0]}.`,
-        rating: String(d.rating),
-        vehicle: `${d.vehicle?.color} ${d.vehicle?.model}`,
-        amenities,
-      });
+    const state = location.state as Record<string, unknown> | null;
+    if (!state || typeof state !== 'object') return;
+
+    if (state.fromMembershipPurchase || state.fromMembershipSkip) {
+      const selectedPaymentMethod = (state.paymentMethod as string) || 'Payment Method';
+      const membershipPurchased = Boolean(state.fromMembershipPurchase);
+      setPaymentMethod(selectedPaymentMethod);
+      setStep('tracking');
+      setHasPremiumAmenities(membershipPurchased);
+      setShowPromo(membershipPurchased);
+      if (state.selectedDriver) {
+        const d = state.selectedDriver as any;
+        const amenities: string[] = [];
+        if (d.amenities?.wifi) amenities.push('Wi-Fi');
+        if (d.amenities?.water) amenities.push('Water');
+        if (d.amenities?.music) amenities.push('TV / AUX / karaoke');
+        if (d.amenities?.charger) amenities.push('USB power');
+        if (d.vehicle?.interior) amenities.push(d.vehicle.interior);
+        setAssignedDriver({
+          name: `${d.name.split(' ')[0]} ${d.name.split(' ')[1]?.[0]}.`,
+          rating: String(d.rating),
+          vehicle: `${d.vehicle?.color} ${d.vehicle?.model}`,
+          amenities,
+        });
+      }
+      setPopupSkippedOnce(false);
+      setAppPromoVariant('app');
+      const hasApp = localStorage.getItem(LS_HAS_INSTALLED_APP) === 'true';
+      const memberNow = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
+      if (memberNow && hasApp) setShowAppPopup(false);
+      else if (hasApp && !memberNow) setShowAppPopup(false);
+      else setShowAppPopup(true);
+      setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: selectedPaymentMethod, status: 'tracking' }));
+      navigate(location.pathname + location.search, { replace: true, state: null });
+      return;
     }
-    setPopupSkippedOnce(false);
-    setAppPromoVariant('app');
-    setShowAppPopup(true);
-    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: selectedPaymentMethod, status: 'tracking' }));
-    navigate(location.pathname, { replace: true, state: null });
-  }, [location.state]);
+
+    if (state.reservedDate) {
+      setReserveMeta({
+        date: state.reservedDate as string,
+        time: state.reservedTime as string | undefined,
+        pickup: state.pickupLocation as string | undefined,
+        serviceType: state.serviceType === 'hourly' ? 'hourly' : 'transfer',
+      });
+      navigate(location.pathname + location.search, { replace: true, state: null });
+    }
+  }, [location.state, location.pathname, location.search, navigate, user, setActiveRide, dropOffLocation]);
 
   const isMember = isMemberFlag || user?.isMember === true;
-  const pickupLocation = deepLinkPickup || user?.hotelName || 'The Grand Majestic Hotel';
+  const pickupLocation = deepLinkPickup || reserveMeta.pickup || user?.hotelName || 'The Grand Majestic Hotel';
 
   const handleBackNavigation = () => {
     if (step === 'tracking') { setStep('payment'); return; }
@@ -99,11 +126,14 @@ export const PassengerTrackingWeb = () => {
 
   const handleSecurePaymentConfirm = () => {
     const memberStatus = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
+    const hasApp = localStorage.getItem(LS_HAS_INSTALLED_APP) === 'true';
     setHasPremiumAmenities(memberStatus);
     setPopupSkippedOnce(false);
     setAppPromoVariant('app');
     setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod, status: 'tracking' }));
-    setShowAppPopup(true);
+    if (memberStatus && hasApp) setShowAppPopup(false);
+    else if (hasApp && !memberStatus) setShowAppPopup(false);
+    else setShowAppPopup(true);
     setStep('tracking');
   };
 
@@ -119,7 +149,7 @@ export const PassengerTrackingWeb = () => {
             <h1 className="text-2xl font-black tracking-tight mb-2 uppercase italic">TUXEDO</h1>
             <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] text-sm font-bold">
               <Navigation className="w-4 h-4 animate-pulse" />
-              {step === 'tracking' ? 'CHAUFFEUR EN ROUTE' : 'RIDE CONFIGURATION'}
+              {step === 'tracking' ? 'CHAUFFEUR EN ROUTE' : step === 'config' ? 'CALL A CAR' : 'RIDE SETUP'}
             </div>
           </div>
         </div>
@@ -130,6 +160,18 @@ export const PassengerTrackingWeb = () => {
               <GlassCard className="p-6 border-[#D4AF37]/20">
                 <h2 className="text-xl font-bold mb-4 uppercase italic">Start Your Journey</h2>
                 <div className="space-y-4">
+                  {reserveMeta.date ? (
+                    <div className="p-3 rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/5 text-center">
+                      <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-widest mb-1">Reserved ride</p>
+                      <p className="text-xs text-white font-bold">
+                        {new Date(reserveMeta.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        {reserveMeta.time ? ` · ${reserveMeta.time}` : ''}
+                      </p>
+                      <p className="text-[10px] text-gray-500 mt-1 uppercase">
+                        {reserveMeta.serviceType === 'hourly' ? 'Hourly' : 'Transfer (A → B)'}
+                      </p>
+                    </div>
+                  ) : null}
                   <div className="p-4 bg-[#D4AF37]/10 rounded-xl border-2 border-[#D4AF37]/40">
                     <p className="text-[10px] text-[#D4AF37] uppercase font-black mb-1">Pickup Location</p>
                     <p className="text-base text-white font-bold">{pickupLocation}</p>
@@ -216,6 +258,18 @@ export const PassengerTrackingWeb = () => {
           {step === 'tracking' && (
             <motion.div key="tracking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
               <DummyMap pickup={pickupLocation} dropoff={dropOffLocation} driverName={assignedDriver.name} />
+              {reserveMeta.date ? (
+                <div className="p-3 rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/5 text-center -mt-2">
+                  <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-widest mb-1">Reserved ride</p>
+                  <p className="text-xs text-white font-bold">
+                    {new Date(reserveMeta.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                    {reserveMeta.time ? ` · ${reserveMeta.time}` : ''}
+                  </p>
+                  <p className="text-[10px] text-gray-500 mt-1 uppercase">
+                    {reserveMeta.serviceType === 'hourly' ? 'Hourly' : 'Transfer (A → B)'}
+                  </p>
+                </div>
+              ) : null}
               <GlassCard className="p-8 text-center border-green-500/20">
                 <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
                 <div className="flex justify-center items-center gap-4 mb-6">
@@ -273,13 +327,19 @@ export const PassengerTrackingWeb = () => {
               onClose={() => setShowAppPopup(false)}
               onSkip={() => {
                 setShowAppPopup(false);
-                if (appPromoVariant === 'app' && !popupSkippedOnce) {
+                const memberNow = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
+                if (appPromoVariant === 'app' && !popupSkippedOnce && !memberNow) {
                   setPopupSkippedOnce(true);
                   setTimeout(() => {
+                    if (localStorage.getItem('isMember') === 'true') return;
                     setAppPromoVariant('membership');
                     setShowAppPopup(true);
                   }, 5000);
                 }
+              }}
+              onMarkHasApp={() => {
+                localStorage.setItem(LS_HAS_INSTALLED_APP, 'true');
+                setShowAppPopup(false);
               }}
             />
           )}
@@ -295,7 +355,7 @@ export const PassengerTrackingWeb = () => {
               </div>
               <div>
                 <p className="text-[10px] font-black text-white uppercase italic tracking-tight">{isMember ? 'Tuxedo Gold Member' : 'Tuxedo Basic Status'}</p>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{isMember ? `$${user?.rideCredit?.toFixed(2)} Ride Credit` : 'Join for $100 & Get $100 Credit'}</p>
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{isMember ? `$${user?.rideCredit?.toFixed(2)} ride credit` : '$100/mo · $100 toward your next ride'}</p>
               </div>
             </div>
             {!isMember ? (
@@ -315,17 +375,20 @@ const AppDownloadPopup = ({
   user,
   onClose,
   onSkip,
+  onMarkHasApp,
 }: {
   variant: 'app' | 'membership';
   user: AppUser | null;
   onClose: () => void;
   onSkip?: () => void;
+  onMarkHasApp?: () => void;
 }) => {
   const navigate = useNavigate();
   const handleDownloadApp = () => {
     const token = Math.random().toString(36).slice(2, 8).toUpperCase();
+    localStorage.setItem(LS_HAS_INSTALLED_APP, 'true');
     localStorage.setItem(
-      'pendingAppDownloadCoupon',
+      LS_PENDING_RIDE_CREDIT,
       JSON.stringify({
         code: `TUX100-${token}`,
         amount: 100,
@@ -379,6 +442,13 @@ const AppDownloadPopup = ({
             <GoldButton onClick={handleDownloadApp} className="w-full py-4 text-base font-black uppercase">
               Download app
             </GoldButton>
+            <button
+              type="button"
+              onClick={() => onMarkHasApp?.()}
+              className="w-full py-2 text-xs font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors underline"
+            >
+              I already have the app
+            </button>
             <button onClick={onSkip ?? onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
               Skip for now
             </button>

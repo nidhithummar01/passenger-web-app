@@ -4,7 +4,7 @@ import { GlassCard, GoldButton } from '../components/GlassCard';
 import { mockDrivers, Driver } from '../data/mockDrivers';
 import { useApp } from '../context/AppContext';
 import {
-  ArrowLeft, Shield, Car, Sparkles, Wifi, Music, Lock, Wallet
+  ArrowLeft, Shield, Car, Sparkles, Wifi, Lock, Wallet, Droplets, Tv, Battery
 } from 'lucide-react';
 
 const toTrackRideState = (flow: { fromTrackRide?: boolean; paymentMethod?: string | null } | null, driver: Driver) => ({
@@ -105,12 +105,22 @@ export const DriverProfileScreen = () => {
                   <div className="grid grid-cols-2 gap-3">
                     {driver.amenities.wifi && (
                       <div className="p-3 bg-[#D4AF37]/10 rounded-xl border border-[#D4AF37]/20 flex items-center gap-2 text-xs text-white font-bold">
-                        <Wifi className="w-3.5 h-3.5 text-[#D4AF37]" /> WiFi
+                        <Wifi className="w-3.5 h-3.5 text-[#D4AF37]" /> Wi-Fi
+                      </div>
+                    )}
+                    {driver.amenities.water && (
+                      <div className="p-3 bg-[#D4AF37]/10 rounded-xl border border-[#D4AF37]/20 flex items-center gap-2 text-xs text-white font-bold">
+                        <Droplets className="w-3.5 h-3.5 text-[#D4AF37]" /> Water
                       </div>
                     )}
                     {driver.amenities.music && (
                       <div className="p-3 bg-[#D4AF37]/10 rounded-xl border border-[#D4AF37]/20 flex items-center gap-2 text-xs text-white font-bold">
-                        <Music className="w-3.5 h-3.5 text-[#D4AF37]" /> Audio
+                        <Tv className="w-3.5 h-3.5 text-[#D4AF37]" /> TV / AUX / karaoke
+                      </div>
+                    )}
+                    {driver.amenities.charger && (
+                      <div className="p-3 bg-[#D4AF37]/10 rounded-xl border border-[#D4AF37]/20 flex items-center gap-2 text-xs text-white font-bold">
+                        <Battery className="w-3.5 h-3.5 text-[#D4AF37]" /> USB power
                       </div>
                     )}
                     {driver.amenities.childSeat && (

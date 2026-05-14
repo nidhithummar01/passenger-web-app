@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, ArrowRightLeft } from 'lucide-react';
 import { GlassCard, GoldButton } from '../components/GlassCard';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -22,6 +22,7 @@ export const ReserveRideScreen = () => {
   const [selectedHour, setSelectedHour] = useState('09');
   const [selectedMinute, setSelectedMinute] = useState('00');
   const [ampm, setAmpm] = useState<'AM' | 'PM'>('AM');
+  const [serviceType, setServiceType] = useState<'transfer' | 'hourly'>('transfer');
 
   const hourRef = React.useRef<HTMLDivElement>(null);
 
@@ -41,6 +42,7 @@ export const ReserveRideScreen = () => {
         reservedDate: selectedDate?.toISOString(),
         reservedTime: timeDisplay,
         pickupLocation,
+        serviceType,
       },
     });
   };
@@ -112,6 +114,31 @@ export const ReserveRideScreen = () => {
               <span className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">Pickup Location</span>
             </div>
             <p className="text-base font-bold text-white">{pickupLocation}</p>
+          </GlassCard>
+
+          <GlassCard className="p-4">
+            <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest mb-2">Ride type</p>
+            <p className="text-xs text-gray-500 mb-3">Transfer is A → B. Hourly is timed at pickup (destination rules later).</p>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setServiceType('transfer')}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${serviceType === 'transfer' ? 'border-[#D4AF37] bg-[#D4AF37]/10' : 'border-white/10 bg-black/40'}`}
+              >
+                <ArrowRightLeft className={`w-4 h-4 mb-1 ${serviceType === 'transfer' ? 'text-[#D4AF37]' : 'text-gray-500'}`} />
+                <p className={`text-sm font-black ${serviceType === 'transfer' ? 'text-[#D4AF37]' : 'text-white'}`}>Transfer</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">One-way</p>
+              </button>
+              <button
+                type="button"
+                onClick={() => setServiceType('hourly')}
+                className={`p-3 rounded-xl border-2 text-left transition-all ${serviceType === 'hourly' ? 'border-[#D4AF37] bg-[#D4AF37]/10' : 'border-white/10 bg-black/40'}`}
+              >
+                <Clock className={`w-4 h-4 mb-1 ${serviceType === 'hourly' ? 'text-[#D4AF37]' : 'text-gray-500'}`} />
+                <p className={`text-sm font-black ${serviceType === 'hourly' ? 'text-[#D4AF37]' : 'text-white'}`}>Hourly</p>
+                <p className="text-[10px] text-gray-500 mt-0.5">By the hour</p>
+              </button>
+            </div>
           </GlassCard>
 
           {/* Date Picker */}
@@ -210,6 +237,10 @@ export const ReserveRideScreen = () => {
                   <div className="flex items-center gap-3">
                     <MapPin className="w-4 h-4 text-[#D4AF37]" />
                     <span className="text-sm text-white font-medium">{pickupLocation}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <ArrowRightLeft className="w-4 h-4 text-[#D4AF37]" />
+                    <span className="text-sm text-white font-medium">{serviceType === 'transfer' ? 'Transfer (A → B)' : 'Hourly'}</span>
                   </div>
                 </div>
               </GlassCard>
