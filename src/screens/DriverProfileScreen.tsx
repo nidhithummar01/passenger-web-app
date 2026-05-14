@@ -1,4 +1,4 @@
-﻿import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { GlassCard, GoldButton } from '../components/GlassCard';
 import { mockDrivers, Driver } from '../data/mockDrivers';

@@ -26,6 +26,7 @@ export const GlassCard = ({ children, className = '', animate = true, onClick }:
         hover:shadow-[0_20px_60px_-15px_rgba(212,175,55,0.3)]
         hover:border-[#D4AF37]/40
         transition-all duration-300
+        ${onClick ? 'cursor-pointer' : ''}
         ${className}
       `}
     >
@@ -64,9 +65,9 @@ export const GoldButton = ({
       transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
       className={`
         ${variants[variant]}
-        px-8 py-4 rounded-xl text-lg
+        cursor-pointer px-8 py-4 rounded-xl text-lg
         transition-all duration-300
-        disabled:opacity-50 disabled:cursor-not-allowed
+        disabled:cursor-not-allowed disabled:opacity-50
         active:scale-95
         flex items-center justify-center gap-3
         ${className}

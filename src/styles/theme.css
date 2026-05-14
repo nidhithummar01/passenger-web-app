@@ -39,10 +39,60 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     font-size: var(--font-size);
+    -webkit-text-size-adjust: 100%;
   }
+  body {
+    @apply bg-background text-foreground antialiased;
+    min-height: 100dvh;
+    padding-left: env(safe-area-inset-left, 0px);
+    padding-right: env(safe-area-inset-right, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* Native <button> defaults to `cursor: default` in many browsers — make affordances obvious */
+  button:not(:disabled),
+  [type='button']:not(:disabled),
+  [type='submit']:not(:disabled),
+  [type='reset']:not(:disabled),
+  [role='button']:not([aria-disabled='true']) {
+    cursor: pointer;
+  }
+  button:disabled,
+  [type='button']:disabled,
+  [type='submit']:disabled,
+  [type='reset']:disabled,
+  [aria-disabled='true'] {
+    cursor: not-allowed;
+  }
+}
+
+/*
+ * Unlayered so this wins over Tailwind preflight / ordering quirks.
+ * All enabled native buttons + explicit role="button" controls show a pointer.
+ */
+button:enabled,
+button:not(:disabled):not([disabled]),
+[role='button']:not([aria-disabled='true']):not([disabled]) {
+  cursor: pointer;
+}
+
+input[type='submit']:enabled,
+input[type='button']:enabled,
+input[type='reset']:enabled {
+  cursor: pointer;
+}
+
+button:disabled,
+button[disabled],
+[role='button'][aria-disabled='true'],
+[role='button'][disabled] {
+  cursor: not-allowed;
+}
+
+input[type='submit']:disabled,
+input[type='button']:disabled,
+input[type='reset']:disabled {
+  cursor: not-allowed;
 }

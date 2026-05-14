@@ -10,11 +10,10 @@ export const MembershipScreen = () => {
   const cameFromTrackRide = flowState?.fromTrackRide === true;
 
   const benefits = [
-    'Manual Chauffeur Selection',
-    'View Full Driver Amenities',
-    'Advanced Search Filters',
-    'Priority Dispatching',
-    'Exclusive Luxury Fleet Access',
+    '24-hour on-demand concierge (dedicated line)',
+    'Advanced chauffeur filters',
+    'Full chauffeur profiles',
+    'Priority dispatching',
   ];
 
   return (
@@ -31,11 +30,15 @@ export const MembershipScreen = () => {
           </motion.div>
 
           <div className="bg-[#D4AF37]/10 p-6 rounded-2xl border border-[#D4AF37]/20 mb-8">
-            <p className="text-xs font-black text-[#D4AF37] uppercase tracking-widest mb-1">Membership Price</p>
-            <p className="text-5xl font-black text-white">$100<span className="text-sm text-gray-500 font-bold">/yr</span></p>
-            <div className="mt-4 flex items-center justify-center gap-2 text-green-500 font-bold text-xs uppercase">
-              <Zap className="w-4 h-4 fill-green-500" />
-              Get $100 Instant Ride Credit
+            <p className="text-xs font-black text-[#D4AF37] uppercase tracking-widest mb-1">Membership</p>
+            <p className="text-5xl font-black text-[#D4AF37]">$100</p>
+            <p className="text-sm text-gray-400 font-semibold mt-1">per month · auto-billing</p>
+            <div className="mt-4 flex flex-col items-center justify-center gap-1 text-green-500 font-bold text-xs uppercase">
+              <div className="flex items-center gap-2">
+                <Zap className="w-4 h-4 fill-green-500" />
+                <span>Get $100 toward your next ride</span>
+              </div>
+              <span className="text-[10px] text-gray-500 font-medium normal-case">Credit does not roll month to month</span>
             </div>
           </div>
 
@@ -52,22 +55,22 @@ export const MembershipScreen = () => {
             onClick={() => navigate('/membership-payment', { state: location.state })}
             className="w-full py-5 text-xl font-black uppercase"
           >
-            Buy Membership
+            Buy membership
           </GoldButton>
 
           {cameFromTrackRide && (
             <button
               onClick={() =>
-                navigate('/driver-list', {
+                navigate('/track-ride', {
                   state: {
-                    fromTrackRide: true,
+                    fromMembershipSkip: true,
                     paymentMethod: flowState?.paymentMethod || null,
                   },
                 })
               }
               className="w-full mt-3 py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors"
             >
-              Continue Without Membership
+              Continue without membership
             </button>
           )}
         </GlassCard>

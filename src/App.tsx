@@ -11,7 +11,7 @@ export default function App() {
   return (
     <AppProvider>
       <BrowserRouter>
-        <div className="dark min-h-screen bg-black max-w-screen overflow-x-hidden">
+        <div className="dark min-h-dvh w-full max-w-[100vw] overflow-x-hidden bg-black text-white supports-[min-height:100dvh]:min-h-[100dvh]">
           <Routes>
             <Route path="/" element={<Navigate to="/track-ride" replace />} />
             <Route path="/track-ride" element={<PassengerTrackingWeb />} />

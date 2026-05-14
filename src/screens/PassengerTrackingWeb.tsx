@@ -1,4 +1,4 @@
-﻿import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { GlassCard, GoldButton } from '../components/GlassCard';
 import {
@@ -31,6 +31,7 @@ export const PassengerTrackingWeb = () => {
   const { user, setActiveRide } = useApp();
 
   const deepLinkPickup = searchParams.get('pickup') || '';
+  const isConciergePickup = Boolean(searchParams.get('token'));
   const [step, setStep] = useState<'config' | 'payment' | 'secure-payment' | 'tracking'>('config');
   const [dropOffLocation, setDropOffLocation] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
@@ -38,6 +39,8 @@ export const PassengerTrackingWeb = () => {
   // Popup only shown after payment completion
   const [showAppPopup, setShowAppPopup] = useState(false);
   const [popupSkippedOnce, setPopupSkippedOnce] = useState(false);
+  /** After pay: app download first; later prompts can sell membership (re-notify = new chance). */
+  const [appPromoVariant, setAppPromoVariant] = useState<'app' | 'membership'>('app');
   const isMemberFlag = localStorage.getItem('isMember') === 'true';
   const [hasPremiumAmenities, setHasPremiumAmenities] = useState<boolean>(isMemberFlag || user?.isMember === true);
   const [assignedDriver, setAssignedDriver] = useState<TrackingDriverDisplay>(DEFAULT_ASSIGNED);
@@ -56,7 +59,7 @@ export const PassengerTrackingWeb = () => {
       const amenities: string[] = [];
       if (d.amenities?.wifi) amenities.push('WiFi');
       if (d.amenities?.water) amenities.push('Refreshments');
-      if (d.amenities?.music) amenities.push('Audio');
+      if (d.amenities?.music) amenities.push('AUX');
       if (d.amenities?.charger) amenities.push('Charger');
       if (d.vehicle?.interior) amenities.push(d.vehicle.interior);
       setAssignedDriver({
@@ -67,6 +70,7 @@ export const PassengerTrackingWeb = () => {
       });
     }
     setPopupSkippedOnce(false);
+    setAppPromoVariant('app');
     setShowAppPopup(true);
     setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: selectedPaymentMethod, status: 'tracking' }));
     navigate(location.pathname, { replace: true, state: null });
@@ -97,6 +101,7 @@ export const PassengerTrackingWeb = () => {
     const memberStatus = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
     setHasPremiumAmenities(memberStatus);
     setPopupSkippedOnce(false);
+    setAppPromoVariant('app');
     setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod, status: 'tracking' }));
     setShowAppPopup(true);
     setStep('tracking');
@@ -128,14 +133,14 @@ export const PassengerTrackingWeb = () => {
                   <div className="p-4 bg-[#D4AF37]/10 rounded-xl border-2 border-[#D4AF37]/40">
                     <p className="text-[10px] text-[#D4AF37] uppercase font-black mb-1">Pickup Location</p>
                     <p className="text-base text-white font-bold">{pickupLocation}</p>
-                    <p className="text-[10px] text-gray-500 mt-1 uppercase">Set by Concierge</p>
+                    <p className="text-[10px] text-gray-500 mt-1 uppercase">{isConciergePickup ? 'Set by concierge' : 'Your pickup'}</p>
                   </div>
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#D4AF37] w-5 h-5" />
                     <input type="text" placeholder="Enter Drop-off Location" value={dropOffLocation} onChange={(e) => setDropOffLocation(e.target.value)} className="w-full bg-black/50 border-2 border-[#D4AF37]/30 rounded-xl py-4 pl-12 pr-4 focus:border-[#D4AF37] outline-none font-bold text-white" />
                   </div>
                   <GoldButton onClick={handleRequestChauffeur} className="w-full py-5 text-xl uppercase font-black" disabled={!dropOffLocation}>
-                    Request Chauffeur
+                    Continue
                   </GoldButton>
 
                 </div>
@@ -229,7 +234,7 @@ export const PassengerTrackingWeb = () => {
                 <div className="relative h-2 bg-white/5 rounded-full overflow-hidden mb-6 border border-white/10">
                   <motion.div className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#D4AF37]/50 to-[#D4AF37]" initial={{ width: '10%' }} animate={{ width: '85%' }} transition={{ duration: 15, repeat: Infinity, ease: 'linear' }} />
                 </div>
-                <p className="text-gray-400 font-medium mb-6 uppercase text-[10px] tracking-widest">Live: Driver is 3 mins away in a {assignedDriver.vehicle}</p>
+                <p className="text-gray-400 font-medium mb-6 uppercase text-[10px] tracking-widest">Your chauffeur is ~3 mins away in a {assignedDriver.vehicle}</p>
                 <div className="mb-6 p-4 bg-black/40 rounded-xl border border-white/5">
                   <div className="flex items-center justify-center gap-2 mb-3">
                     <Sparkles className="w-4 h-4 text-[#D4AF37]" />
@@ -263,13 +268,17 @@ export const PassengerTrackingWeb = () => {
         <AnimatePresence>
           {showAppPopup && (
             <AppDownloadPopup
+              variant={appPromoVariant}
               user={user}
               onClose={() => setShowAppPopup(false)}
               onSkip={() => {
                 setShowAppPopup(false);
-                if (!popupSkippedOnce) {
+                if (appPromoVariant === 'app' && !popupSkippedOnce) {
                   setPopupSkippedOnce(true);
-                  setTimeout(() => setShowAppPopup(true), 5000);
+                  setTimeout(() => {
+                    setAppPromoVariant('membership');
+                    setShowAppPopup(true);
+                  }, 5000);
                 }
               }}
             />
@@ -301,18 +310,61 @@ export const PassengerTrackingWeb = () => {
   );
 };
 
-const AppDownloadPopup = ({ user, onClose, onSkip }: { user: AppUser | null; onClose: () => void; onSkip?: () => void }) => {
+const AppDownloadPopup = ({
+  variant,
+  user,
+  onClose,
+  onSkip,
+}: {
+  variant: 'app' | 'membership';
+  user: AppUser | null;
+  onClose: () => void;
+  onSkip?: () => void;
+}) => {
   const navigate = useNavigate();
   const handleDownloadApp = () => {
     const token = Math.random().toString(36).slice(2, 8).toUpperCase();
-    localStorage.setItem('pendingAppDownloadCoupon', JSON.stringify({ code: `TUX100-${token}`, amount: 100, linkedIdentity: { phone: user?.phone || null, email: user?.email || null }, status: 'pending_app_login', issuedAt: new Date().toISOString() }));
+    localStorage.setItem(
+      'pendingAppDownloadCoupon',
+      JSON.stringify({
+        code: `TUX100-${token}`,
+        amount: 100,
+        linkedIdentity: { phone: user?.phone || null, email: user?.email || null },
+        status: 'pending_app_login',
+        issuedAt: new Date().toISOString(),
+      })
+    );
     window.open('https://apps.apple.com', '_blank');
     onClose();
   };
-  const handleBuyMembership = () => {
+  const handleMembership = () => {
     onClose();
     navigate('/membership');
   };
+  if (variant === 'membership') {
+    return (
+      <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
+        <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-sm">
+          <GlassCard className="p-8 text-center border-[#D4AF37]/40 shadow-2xl shadow-[#D4AF37]/30">
+            <div className="w-16 h-16 bg-[#D4AF37]/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#D4AF37]/30">
+              <Crown className="w-8 h-8 text-[#D4AF37]" />
+            </div>
+            <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest mb-2">Tuxedo Gold</p>
+            <h3 className="text-3xl font-black text-[#D4AF37] mb-1">$100</h3>
+            <p className="text-sm text-gray-300 font-medium mb-8">toward your next ride each month with membership — $100/mo, credit does not roll over.</p>
+            <div className="space-y-3">
+              <GoldButton onClick={handleMembership} className="w-full py-4 text-base font-black uppercase">
+                View membership
+              </GoldButton>
+              <button onClick={onSkip ?? onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
+                Not now
+              </button>
+            </div>
+          </GlassCard>
+        </motion.div>
+      </motion.div>
+    );
+  }
   return (
     <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
       <motion.div initial={{ opacity: 0, scale: 0.9, y: 20 }} animate={{ opacity: 1, scale: 1, y: 0 }} exit={{ opacity: 0, scale: 0.9, y: 20 }} transition={{ type: 'spring', damping: 25, stiffness: 300 }} className="w-full max-w-sm">
@@ -320,21 +372,15 @@ const AppDownloadPopup = ({ user, onClose, onSkip }: { user: AppUser | null; onC
           <div className="w-16 h-16 bg-[#D4AF37]/20 rounded-2xl flex items-center justify-center mx-auto mb-4 border border-[#D4AF37]/30">
             <Gift className="w-8 h-8 text-[#D4AF37]" />
           </div>
-          <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest mb-2">Exclusive Offer</p>
-          <h3 className="text-xl font-black text-white mb-2 leading-tight uppercase italic">FREE $100 Coupon</h3>
-          <p className="text-sm text-gray-400 font-medium mb-8">Download our app or buy a membership and get <span className="text-[#D4AF37] font-bold">$100 free</span> on your next ride.</p>
+          <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest mb-2">Mobile app</p>
+          <h3 className="text-4xl font-black text-[#D4AF37] mb-1">Get $100</h3>
+          <p className="text-base text-gray-300 font-medium mb-8">toward your next ride when you download the Tuxedo app.</p>
           <div className="space-y-3">
             <GoldButton onClick={handleDownloadApp} className="w-full py-4 text-base font-black uppercase">
-              Download App
+              Download app
             </GoldButton>
-            <button
-              onClick={handleBuyMembership}
-              className="w-full py-4 rounded-xl border-2 border-[#D4AF37]/40 text-[#D4AF37] font-black text-sm uppercase tracking-widest hover:bg-[#D4AF37]/10 transition-all"
-            >
-              Buy Membership
-            </button>
             <button onClick={onSkip ?? onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
-              Skip for Now
+              Skip for now
             </button>
           </div>
         </GlassCard>

@@ -1,4 +1,4 @@
-﻿import { useState } from 'react';
+import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, GoldButton } from '../components/GlassCard';
@@ -69,7 +69,7 @@ export const DriverListScreen = () => {
         <GlassCard className="p-8 mb-4">
           <motion.h2 className="text-2xl mb-3 text-white font-bold uppercase italic tracking-tight">Available Chauffeurs</motion.h2>
           <p className="text-base text-gray-400 font-medium mb-6">
-            {filteredDrivers.length} driver{filteredDrivers.length !== 1 ? 's' : ''} found for your schedule
+            {filteredDrivers.length} chauffeur{filteredDrivers.length !== 1 ? 's' : ''} available for your schedule
           </p>
 
           {/* Filters panel */}

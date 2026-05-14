@@ -18,7 +18,7 @@ export const MembershipPaymentScreen = () => {
     });
 
     const state = location.state as { fromTrackRide?: boolean; paymentMethod?: string } | null;
-    navigate('/driver-list', {
+    navigate('/track-ride', {
       state: {
         fromMembershipPurchase: true,
         paymentMethod: state?.paymentMethod || null,
@@ -47,15 +47,18 @@ export const MembershipPaymentScreen = () => {
               <ShieldCheck className="w-16 h-16 text-[#D4AF37] mx-auto mb-4" />
             </motion.div>
             <h2 className="text-2xl font-black text-white uppercase italic tracking-tight">Complete Payment</h2>
-            <p className="text-gray-500 font-bold uppercase text-xs tracking-widest mt-1">Annual Gold Membership</p>
+            <p className="text-gray-500 font-bold uppercase text-xs tracking-widest mt-1">Gold membership · monthly</p>
           </div>
 
           <div className="bg-[#D4AF37]/5 border border-[#D4AF37]/20 rounded-2xl p-6 mb-8 text-center">
-            <p className="text-gray-400 text-[10px] font-black uppercase mb-1">Total Due</p>
+            <p className="text-gray-400 text-[10px] font-black uppercase mb-1">Due today</p>
             <p className="text-4xl font-black text-white">$100.00</p>
-            <div className="flex items-center justify-center gap-2 mt-2 text-green-500 font-bold text-[10px] uppercase">
-              <Zap className="w-3 h-3 fill-green-500" />
-              Includes $100 Ride Credit
+            <div className="flex flex-col items-center justify-center gap-1 mt-2 text-green-500 font-bold text-[10px] uppercase">
+              <div className="flex items-center gap-2">
+                <Zap className="w-3 h-3 fill-green-500" />
+                <span>$100 toward your next ride</span>
+              </div>
+              <span className="text-[9px] text-gray-500 font-medium normal-case">Monthly credit does not stack</span>
             </div>
           </div>
 
@@ -80,7 +83,7 @@ export const MembershipPaymentScreen = () => {
 
           <p className="text-[10px] text-gray-600 text-center uppercase font-black px-4 leading-relaxed italic">
             Secure payment processed by Tuxedo Financial. <br />
-            Membership unlocks full driver profiles and amenities.
+            Membership includes advanced chauffeur filters and full profiles in the app.
           </p>
         </GlassCard>
       </div>
