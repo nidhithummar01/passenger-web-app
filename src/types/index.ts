@@ -1,5 +1,5 @@
 export type UserRole = 'concierge' | 'manager' | 'passenger';
-export type RideStatus = 'creating' | 'matching' | 'assigned' | 'arriving' | 'onboard' | 'enroute' | 'completed' | 'cancelled';
+export type RideStatus = 'creating' | 'matching' | 'assigned' | 'arriving' | 'arrived' | 'onboard' | 'enroute' | 'completed' | 'cancelled';
 export type VehicleType = 'sedan' | 'suv' | 'luxury' | 'van';
 export type PaymentType = 'card' | 'cash';
 
@@ -16,6 +16,7 @@ export interface User {
   kycStatus: 'pending' | 'approved' | 'rejected';
   isMember: boolean;
   rideCredit: number;
+  savedPaymentMethod?: string | null;
 }
 
 export interface Ride {
@@ -33,4 +34,5 @@ export interface Ride {
   dropOffLocation?: string;
   paymentMethod?: string | null;
   driverMoving?: boolean;
+  hourlyHours?: number;
 }

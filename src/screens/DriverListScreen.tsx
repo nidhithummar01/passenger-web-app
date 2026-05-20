@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { GlassCard, GoldButton } from '../components/GlassCard';
+import { TuxedoLogo } from '../components/TuxedoLogo';
 import { mockDrivers, Driver } from '../data/mockDrivers';
 import { useApp } from '../context/AppContext';
 import {
@@ -47,6 +48,8 @@ export const DriverListScreen = () => {
           >
             <ArrowLeft className="w-5 h-5" /> Back
           </motion.button>
+
+          <TuxedoLogo className="h-9 w-auto" />
 
           {isMember && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3 px-4 py-2 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30">

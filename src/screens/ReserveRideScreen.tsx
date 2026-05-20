@@ -2,17 +2,19 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, MapPin, Calendar, Clock, CheckCircle2, ArrowRightLeft } from 'lucide-react';
 import { GlassCard, GoldButton } from '../components/GlassCard';
+import { TuxedoLogo } from '../components/TuxedoLogo';
 import { motion, AnimatePresence } from 'motion/react';
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const DAYS = ['SU','MO','TU','WE','TH','FR','SA'];
 const HOURS = ['01','02','03','04','05','06','07','08','09','10','11','12'];
 const MINUTES = ['00','15','30','45'];
+const HOURLY_DURATIONS = Array.from({ length: 11 }, (_, i) => i + 2);
 
 export const ReserveRideScreen = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const pickupLocation = (location.state as any)?.pickupLocation || 'The Grand Majestic Hotel';
+  const initialPickupLocation = (location.state as any)?.pickupLocation || 'The Grand Majestic Hotel';
 
   const today = new Date();
   const [showCalendar, setShowCalendar] = useState(false);
@@ -23,6 +25,8 @@ export const ReserveRideScreen = () => {
   const [selectedMinute, setSelectedMinute] = useState('00');
   const [ampm, setAmpm] = useState<'AM' | 'PM'>('AM');
   const [serviceType, setServiceType] = useState<'transfer' | 'hourly'>('transfer');
+  const [pickupLocation, setPickupLocation] = useState(initialPickupLocation);
+  const [hourlyHours, setHourlyHours] = useState(2);
 
   const hourRef = React.useRef<HTMLDivElement>(null);
 
@@ -34,15 +38,16 @@ export const ReserveRideScreen = () => {
 
   const timeDisplay = `${selectedHour}:${selectedMinute} ${ampm}`;
 
-  const canConfirm = selectedDate !== null;
+  const canConfirm = selectedDate !== null && pickupLocation.trim().length > 0;
 
   const handleConfirm = () => {
     navigate('/track-ride', {
       state: {
         reservedDate: selectedDate?.toISOString(),
         reservedTime: timeDisplay,
-        pickupLocation,
+        pickupLocation: pickupLocation.trim(),
         serviceType,
+        hourlyHours: serviceType === 'hourly' ? hourlyHours : undefined,
       },
     });
   };
@@ -96,6 +101,8 @@ export const ReserveRideScreen = () => {
           <ArrowLeft className="w-5 h-5" /> Back
         </button>
 
+        <TuxedoLogo className="mx-auto mb-8 h-10 w-auto" />
+
         <div className="flex items-center gap-4 mb-8">
           <div className="w-14 h-14 bg-[#D4AF37]/20 rounded-2xl flex items-center justify-center border border-[#D4AF37]/30">
             <Calendar className="w-7 h-7 text-[#D4AF37]" />
@@ -113,7 +120,13 @@ export const ReserveRideScreen = () => {
               <MapPin className="w-4 h-4 text-[#D4AF37]" />
               <span className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">Pickup Location</span>
             </div>
-            <p className="text-base font-bold text-white">{pickupLocation}</p>
+            <input
+              type="text"
+              value={pickupLocation}
+              onChange={(e) => setPickupLocation(e.target.value)}
+              placeholder="Enter pickup location"
+              className="w-full rounded-xl border border-white/10 bg-black/50 px-4 py-3 text-base font-bold text-white outline-none transition placeholder:text-gray-600 focus:border-[#D4AF37]/70"
+            />
           </GlassCard>
 
           <GlassCard className="p-4">
@@ -140,6 +153,36 @@ export const ReserveRideScreen = () => {
               </button>
             </div>
           </GlassCard>
+
+          {serviceType === 'hourly' && (
+            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+              <GlassCard className="p-4 border-[#D4AF37]/25">
+                <div className="flex items-center justify-between gap-3 mb-3">
+                  <div>
+                    <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">Hourly duration</p>
+                    <p className="text-xs text-gray-500 mt-1">Minimum 2 hours, maximum 12 hours.</p>
+                  </div>
+                  <p className="text-2xl font-black text-white">{hourlyHours}h</p>
+                </div>
+                <div className="flex gap-2 overflow-x-auto pb-1">
+                  {HOURLY_DURATIONS.map(hours => (
+                    <button
+                      key={hours}
+                      type="button"
+                      onClick={() => setHourlyHours(hours)}
+                      className={`min-w-[52px] rounded-xl px-3 py-3 text-sm font-black transition-all ${
+                        hourlyHours === hours
+                          ? 'bg-[#D4AF37] text-black'
+                          : 'border border-white/10 bg-white/5 text-white hover:bg-white/10'
+                      }`}
+                    >
+                      {hours}h
+                    </button>
+                  ))}
+                </div>
+              </GlassCard>
+            </motion.div>
+          )}
 
           {/* Date Picker */}
           <GlassCard className="p-4">
@@ -240,7 +283,7 @@ export const ReserveRideScreen = () => {
                   </div>
                   <div className="flex items-center gap-3">
                     <ArrowRightLeft className="w-4 h-4 text-[#D4AF37]" />
-                    <span className="text-sm text-white font-medium">{serviceType === 'transfer' ? 'Transfer (A → B)' : 'Hourly'}</span>
+                    <span className="text-sm text-white font-medium">{serviceType === 'transfer' ? 'Transfer (A → B)' : `Hourly · ${hourlyHours} hours`}</span>
                   </div>
                 </div>
               </GlassCard>

@@ -4,26 +4,24 @@ import { CreditCard, Apple, ShieldCheck, Zap, ArrowLeft } from 'lucide-react';
 import { useApp } from '../context/AppContext';
 import { User } from '../types';
 import { motion } from 'motion/react';
+import { TuxedoLogo } from '../components/TuxedoLogo';
+
+const LS_SAVED_PAYMENT_METHOD = 'tuxedoSavedPaymentMethod';
 
 export const MembershipPaymentScreen = () => {
   const navigate = useNavigate();
-  const location = useLocation();
-  const { setUser } = useApp();
+  const { setUser, setActiveRide } = useApp();
 
-  const handlePayment = () => {
+  const handlePayment = (method: string) => {
     localStorage.setItem('isMember', 'true');
+    localStorage.setItem(LS_SAVED_PAYMENT_METHOD, method);
     setUser((prev: User | null) => {
       if (!prev) return null;
-      return { ...prev, isMember: true, rideCredit: 100 };
+      return { ...prev, isMember: true, rideCredit: 100, savedPaymentMethod: method };
     });
 
-    const state = location.state as { fromTrackRide?: boolean; paymentMethod?: string } | null;
-    navigate('/track-ride', {
-      state: {
-        fromMembershipPurchase: true,
-        paymentMethod: state?.paymentMethod || null,
-      },
-    });
+    setActiveRide(null);
+    navigate('/track-ride', { replace: true, state: null });
   };
 
   return (
@@ -37,6 +35,8 @@ export const MembershipPaymentScreen = () => {
             <ArrowLeft className="w-5 h-5" />
             Back
           </button>
+
+          <TuxedoLogo className="mx-auto mb-7 h-10 w-auto" />
 
           <div className="text-center mb-8">
             <motion.div
@@ -69,7 +69,7 @@ export const MembershipPaymentScreen = () => {
             ].map((method) => (
               <button
                 key={method.id}
-                onClick={handlePayment}
+                onClick={() => handlePayment(method.label)}
                 className="w-full p-5 bg-white/5 border border-white/10 rounded-xl flex items-center justify-between hover:border-[#D4AF37] transition-all group"
               >
                 <div className="flex items-center gap-4">

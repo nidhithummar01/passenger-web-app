@@ -1,17 +1,90 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { GlassCard, GoldButton } from '../components/GlassCard';
 import {
   MapPin, Car, Navigation,
   CreditCard, DollarSign, CheckCircle2, Gift, Lock, Sparkles,
-  User, Crown, Wallet, ArrowRight, ArrowLeft, Apple
+  User, Crown, Wallet, ArrowRight, ArrowLeft, Apple, Bell, Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { useApp } from '../context/AppContext';
-import type { User as AppUser } from '../types';
+import { TuxedoLogo } from '../components/TuxedoLogo';
+import type { RideStatus, User as AppUser } from '../types';
 
 const LS_HAS_INSTALLED_APP = 'tuxedoHasInstalledApp';
 const LS_PENDING_RIDE_CREDIT = 'tuxedoPendingRideCredit';
+const LS_LAST_SMS_OFFER = 'tuxedoLastSmsOffer';
+const LS_SAVED_PAYMENT_METHOD = 'tuxedoSavedPaymentMethod';
+const APP_DOWNLOAD_POPUP_DELAY_MS = 5000;
+const MEMBERSHIP_AFTER_ONBOARD_DELAY_MS = 30000;
+const RIDE_STATUS_TIMELINE: Array<{ delay: number; status: RideStatus }> = [
+  { delay: 0, status: 'arriving' },
+  { delay: 15000, status: 'arrived' },
+  { delay: 30000, status: 'onboard' },
+  { delay: 45000, status: 'enroute' },
+  { delay: 90000, status: 'completed' },
+];
+
+const STATUS_COPY: Partial<Record<RideStatus, { title: string; body: string; icon: 'bell' | 'car' | 'pin' | 'star' }>> = {
+  arriving: {
+    title: 'Chauffeur is on the way',
+    body: 'Track progress and be ready near your pickup location.',
+    icon: 'car',
+  },
+  arrived: {
+    title: 'Chauffeur has arrived',
+    body: 'Please meet your chauffeur at the pickup location.',
+    icon: 'pin',
+  },
+  onboard: {
+    title: 'Ride started',
+    body: 'You are on your way to the destination.',
+    icon: 'car',
+  },
+  enroute: {
+    title: 'Ride in progress',
+    body: 'Enjoy your ride. We will notify you when it is complete.',
+    icon: 'car',
+  },
+  completed: {
+    title: 'Ride completed',
+    body: 'Thanks for riding with Tuxedo. Please rate your experience.',
+    icon: 'star',
+  },
+};
+
+type StatusNotice = NonNullable<(typeof STATUS_COPY)[RideStatus]>;
+
+function getSavedPaymentMethod(user: AppUser | null): string | null {
+  return user?.savedPaymentMethod || localStorage.getItem(LS_SAVED_PAYMENT_METHOD);
+}
+
+function createPendingAppOffer(user: AppUser | null) {
+  const issuedAt = new Date();
+  const expiresAt = new Date(issuedAt.getTime() + 15 * 60 * 1000);
+  const token = Math.random().toString(36).slice(2, 8).toUpperCase();
+  const payload = {
+    code: `TUX100-${token}`,
+    amount: 100,
+    linkedIdentity: { phone: user?.phone || null, email: user?.email || null },
+    status: 'pending_app_login',
+    issuedAt: issuedAt.toISOString(),
+    expiresAt: expiresAt.toISOString(),
+  };
+
+  localStorage.setItem(LS_PENDING_RIDE_CREDIT, JSON.stringify(payload));
+  localStorage.setItem(
+    LS_LAST_SMS_OFFER,
+    JSON.stringify({
+      type: 'app-download',
+      sentAt: issuedAt.toISOString(),
+      message: 'Download the Tuxedo app to claim $100 toward your next ride.',
+      link: 'https://apps.apple.com',
+      code: payload.code,
+      expiresAt: payload.expiresAt,
+    })
+  );
+}
 
 type TrackingDriverDisplay = {
   name: string;
@@ -42,16 +115,23 @@ export const PassengerTrackingWeb = () => {
   // Popup only shown after payment completion
   const [showAppPopup, setShowAppPopup] = useState(false);
   const [popupSkippedOnce, setPopupSkippedOnce] = useState(false);
+  const [appOfferShown, setAppOfferShown] = useState(false);
+  const [membershipOfferShown, setMembershipOfferShown] = useState(false);
   /** After pay: app download first; later prompts can sell membership (re-notify = new chance). */
   const [appPromoVariant, setAppPromoVariant] = useState<'app' | 'membership'>('app');
+  const [rideStatus, setRideStatus] = useState<RideStatus | null>(null);
+  const [statusNotice, setStatusNotice] = useState<StatusNotice | null>(null);
+  const [showRideCompletePopup, setShowRideCompletePopup] = useState(false);
   const isMemberFlag = localStorage.getItem('isMember') === 'true';
   const [hasPremiumAmenities, setHasPremiumAmenities] = useState<boolean>(isMemberFlag || user?.isMember === true);
   const [assignedDriver, setAssignedDriver] = useState<TrackingDriverDisplay>(DEFAULT_ASSIGNED);
+  const membershipTimerRef = useRef<number | null>(null);
   const [reserveMeta, setReserveMeta] = useState<{
     date?: string;
     time?: string;
     pickup?: string;
     serviceType?: 'transfer' | 'hourly';
+    hourlyHours?: number;
   }>({});
 
   useEffect(() => {
@@ -82,11 +162,7 @@ export const PassengerTrackingWeb = () => {
       }
       setPopupSkippedOnce(false);
       setAppPromoVariant('app');
-      const hasApp = localStorage.getItem(LS_HAS_INSTALLED_APP) === 'true';
-      const memberNow = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
-      if (memberNow && hasApp) setShowAppPopup(false);
-      else if (hasApp && !memberNow) setShowAppPopup(false);
-      else setShowAppPopup(true);
+      setShowAppPopup(false);
       setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: selectedPaymentMethod, status: 'tracking' }));
       navigate(location.pathname + location.search, { replace: true, state: null });
       return;
@@ -98,6 +174,7 @@ export const PassengerTrackingWeb = () => {
         time: state.reservedTime as string | undefined,
         pickup: state.pickupLocation as string | undefined,
         serviceType: state.serviceType === 'hourly' ? 'hourly' : 'transfer',
+        hourlyHours: typeof state.hourlyHours === 'number' ? state.hourlyHours : undefined,
       });
       navigate(location.pathname + location.search, { replace: true, state: null });
     }
@@ -105,16 +182,124 @@ export const PassengerTrackingWeb = () => {
 
   const isMember = isMemberFlag || user?.isMember === true;
   const pickupLocation = deepLinkPickup || reserveMeta.pickup || user?.hotelName || 'The Grand Majestic Hotel';
+  const rideStatusLabel =
+    rideStatus === 'arrived'
+      ? 'Your chauffeur has arrived at pickup'
+      : rideStatus === 'onboard'
+        ? `Ride started in a ${assignedDriver.vehicle}`
+        : rideStatus === 'enroute'
+          ? `On the way to ${dropOffLocation || 'your destination'}`
+          : rideStatus === 'completed'
+            ? 'Ride complete'
+            : `Your chauffeur is ~3 mins away in a ${assignedDriver.vehicle}`;
+
+  useEffect(() => {
+    if (step !== 'tracking') {
+      setRideStatus(null);
+      setStatusNotice(null);
+      setShowRideCompletePopup(false);
+      return;
+    }
+
+    const timers = RIDE_STATUS_TIMELINE.map(({ delay, status }) =>
+      window.setTimeout(() => {
+        setRideStatus(status);
+        setActiveRide((prev: any) => ({
+          ...(prev || {}),
+          dropOffLocation,
+          paymentMethod,
+          status,
+        }));
+        if (status === 'completed') {
+          setShowAppPopup(false);
+          setShowRideCompletePopup(true);
+        }
+      }, delay)
+    );
+
+    return () => timers.forEach(window.clearTimeout);
+  }, [step, setActiveRide, dropOffLocation, paymentMethod]);
+
+  useEffect(() => {
+    if (step !== 'tracking') {
+      setAppOfferShown(false);
+      setPopupSkippedOnce(false);
+      setMembershipOfferShown(false);
+      if (membershipTimerRef.current) {
+        window.clearTimeout(membershipTimerRef.current);
+        membershipTimerRef.current = null;
+      }
+    }
+  }, [step]);
+
+  useEffect(() => {
+    if (!rideStatus) return;
+    const nextNotice = STATUS_COPY[rideStatus];
+    if (!nextNotice) return;
+
+    setStatusNotice(nextNotice);
+    const timer = window.setTimeout(() => setStatusNotice(null), rideStatus === 'completed' ? 6000 : 4200);
+    return () => window.clearTimeout(timer);
+  }, [rideStatus]);
+
+  useEffect(() => {
+    if (step !== 'tracking') return;
+    if (appOfferShown) return;
+    if (rideStatus === 'completed') return;
+    if (localStorage.getItem(LS_HAS_INSTALLED_APP) === 'true') return;
+
+    setShowAppPopup(false);
+    setAppPromoVariant('app');
+
+    const timer = setTimeout(() => {
+      if (localStorage.getItem(LS_HAS_INSTALLED_APP) === 'true') return;
+      createPendingAppOffer(user);
+      setAppOfferShown(true);
+      setShowAppPopup(true);
+    }, APP_DOWNLOAD_POPUP_DELAY_MS);
+
+    return () => clearTimeout(timer);
+  }, [step, rideStatus, appOfferShown, user]);
+
+  useEffect(() => {
+    if (step !== 'tracking') return;
+    if (rideStatus !== 'onboard') return;
+    if (!popupSkippedOnce || membershipOfferShown) return;
+    if (localStorage.getItem('isMember') === 'true' || user?.isMember === true) return;
+    if (membershipTimerRef.current) return;
+
+    membershipTimerRef.current = window.setTimeout(() => {
+      setAppPromoVariant('membership');
+      setMembershipOfferShown(true);
+      setShowAppPopup(true);
+      membershipTimerRef.current = null;
+      localStorage.setItem(
+        LS_LAST_SMS_OFFER,
+        JSON.stringify({
+          type: 'membership',
+          sentAt: new Date().toISOString(),
+          message: 'Buy Tuxedo Gold for $100/month and get $100 toward your next ride.',
+        })
+      );
+    }, MEMBERSHIP_AFTER_ONBOARD_DELAY_MS);
+  }, [step, rideStatus, popupSkippedOnce, membershipOfferShown, user?.isMember]);
 
   const handleBackNavigation = () => {
-    if (step === 'tracking') { setStep('payment'); return; }
-    if (step === 'secure-payment') { setStep('payment'); return; }
+    const savedPaymentMethod = getSavedPaymentMethod(user);
+    if (step === 'tracking') { setStep(savedPaymentMethod ? 'config' : 'payment'); return; }
+    if (step === 'secure-payment') { setStep(savedPaymentMethod ? 'config' : 'payment'); return; }
     if (step === 'payment') { setStep('config'); return; }
     navigate(-1);
   };
 
   const handleRequestChauffeur = () => {
-    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, status: 'tracking', driverMoving: true }));
+    const savedPaymentMethod = getSavedPaymentMethod(user);
+    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: savedPaymentMethod, status: 'configuring', driverMoving: true }));
+    if (savedPaymentMethod) {
+      setPaymentMethod(savedPaymentMethod);
+      setStep('secure-payment');
+      return;
+    }
     setStep('payment');
   };
 
@@ -125,64 +310,73 @@ export const PassengerTrackingWeb = () => {
   };
 
   const handleSecurePaymentConfirm = () => {
+    if (paymentMethod) localStorage.setItem(LS_SAVED_PAYMENT_METHOD, paymentMethod);
     const memberStatus = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
-    const hasApp = localStorage.getItem(LS_HAS_INSTALLED_APP) === 'true';
     setHasPremiumAmenities(memberStatus);
     setPopupSkippedOnce(false);
+    setAppOfferShown(false);
+    setMembershipOfferShown(false);
     setAppPromoVariant('app');
     setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod, status: 'tracking' }));
-    if (memberStatus && hasApp) setShowAppPopup(false);
-    else if (hasApp && !memberStatus) setShowAppPopup(false);
-    else setShowAppPopup(true);
+    setShowAppPopup(false);
     setStep('tracking');
   };
 
 
   return (
-    <div className="min-h-screen bg-black p-4 font-sans text-white flex flex-col">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,rgba(212,175,55,0.13),transparent_34%),#020202] p-4 font-sans text-white flex flex-col">
       <div className="max-w-md mx-auto w-full space-y-6 pt-8 flex-grow">
-        <div className="mb-8">
+        <div className="mb-7">
           <button onClick={handleBackNavigation} className={`mb-4 text-base text-[#D4AF37] hover:text-[#B8962A] flex items-center gap-2 font-semibold ${step === 'config' ? 'invisible' : ''}`}>
             <ArrowLeft className="w-5 h-5" /> Back
           </button>
           <div className="text-center">
-            <h1 className="text-2xl font-black tracking-tight mb-2 uppercase italic">TUXEDO</h1>
-            <div className="inline-flex items-center gap-2 px-4 py-1 rounded-full bg-[#D4AF37]/20 border border-[#D4AF37]/30 text-[#D4AF37] text-sm font-bold">
-              <Navigation className="w-4 h-4 animate-pulse" />
-              {step === 'tracking' ? 'CHAUFFEUR EN ROUTE' : step === 'config' ? 'CALL A CAR' : 'RIDE SETUP'}
-            </div>
+            <TuxedoLogo className="mx-auto h-10 w-auto" />
+            {step !== 'config' && (
+              <div className="mt-3 inline-flex items-center gap-2 px-4 py-1 rounded-full bg-[#D4AF37]/15 border border-[#D4AF37]/25 text-[#D4AF37] text-sm font-bold">
+                <Navigation className="w-4 h-4 animate-pulse" />
+                {step === 'tracking' ? 'CHAUFFEUR EN ROUTE' : 'RIDE SETUP'}
+              </div>
+            )}
           </div>
         </div>
 
         <AnimatePresence mode="wait">
           {step === 'config' && (
-            <motion.div key="config" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -20 }}>
-              <GlassCard className="p-6 border-[#D4AF37]/20">
-                <h2 className="text-xl font-bold mb-4 uppercase italic">Start Your Journey</h2>
-                <div className="space-y-4">
+            <motion.div key="config" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -18 }}>
+              <GlassCard className="p-5 border-white/10 bg-white/[0.035] shadow-[0_24px_70px_-35px_rgba(212,175,55,0.55)]">
+                <div className="mb-6">
+                  <p className="text-[11px] font-black uppercase tracking-[0.28em] text-[#D4AF37]">Private Chauffeur</p>
+                  <h2 className="mt-2 text-2xl font-black tracking-tight text-white">Where are you going?</h2>
+                  <p className="mt-1 text-sm font-medium text-gray-500">Enter your destination and we’ll match a chauffeur.</p>
+                </div>
+                <div className="space-y-3">
                   {reserveMeta.date ? (
-                    <div className="p-3 rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/5 text-center">
+                    <div className="p-3 rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/5 text-center">
                       <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-widest mb-1">Reserved ride</p>
                       <p className="text-xs text-white font-bold">
                         {new Date(reserveMeta.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
                         {reserveMeta.time ? ` · ${reserveMeta.time}` : ''}
                       </p>
                       <p className="text-[10px] text-gray-500 mt-1 uppercase">
-                        {reserveMeta.serviceType === 'hourly' ? 'Hourly' : 'Transfer (A → B)'}
+                        {reserveMeta.serviceType === 'hourly' ? `${reserveMeta.hourlyHours || 2} hour minimum` : 'Transfer (A → B)'}
                       </p>
                     </div>
                   ) : null}
-                  <div className="p-4 bg-[#D4AF37]/10 rounded-xl border-2 border-[#D4AF37]/40">
-                    <p className="text-[10px] text-[#D4AF37] uppercase font-black mb-1">Pickup Location</p>
-                    <p className="text-base text-white font-bold">{pickupLocation}</p>
-                    <p className="text-[10px] text-gray-500 mt-1 uppercase">{isConciergePickup ? 'Set by concierge' : 'Your pickup'}</p>
+                  <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e] shadow-[0_0_18px_rgba(34,197,94,0.55)]" />
+                      <p className="text-[10px] text-[#D4AF37] uppercase font-black tracking-widest">Pickup</p>
+                    </div>
+                    <p className="text-base text-white font-bold leading-snug">{pickupLocation}</p>
+                    <p className="text-[11px] text-gray-500 mt-1">{isConciergePickup ? 'Set by concierge' : 'Current pickup location'}</p>
                   </div>
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#D4AF37] w-5 h-5" />
-                    <input type="text" placeholder="Enter Drop-off Location" value={dropOffLocation} onChange={(e) => setDropOffLocation(e.target.value)} className="w-full bg-black/50 border-2 border-[#D4AF37]/30 rounded-xl py-4 pl-12 pr-4 focus:border-[#D4AF37] outline-none font-bold text-white" />
+                    <input type="text" placeholder="Drop-off location" value={dropOffLocation} onChange={(e) => setDropOffLocation(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/55 py-4 pl-12 pr-4 font-bold text-white outline-none transition placeholder:text-gray-500 focus:border-[#D4AF37]/70 focus:bg-black" />
                   </div>
-                  <GoldButton onClick={handleRequestChauffeur} className="w-full py-5 text-xl uppercase font-black" disabled={!dropOffLocation}>
-                    Continue
+                  <GoldButton onClick={handleRequestChauffeur} className="mt-2 w-full py-4 text-base uppercase font-black tracking-wide rounded-2xl" disabled={!dropOffLocation}>
+                    Continue to Ride
                   </GoldButton>
 
                 </div>
@@ -266,7 +460,7 @@ export const PassengerTrackingWeb = () => {
                     {reserveMeta.time ? ` · ${reserveMeta.time}` : ''}
                   </p>
                   <p className="text-[10px] text-gray-500 mt-1 uppercase">
-                    {reserveMeta.serviceType === 'hourly' ? 'Hourly' : 'Transfer (A → B)'}
+                    {reserveMeta.serviceType === 'hourly' ? `${reserveMeta.hourlyHours || 2} hour minimum` : 'Transfer (A → B)'}
                   </p>
                 </div>
               ) : null}
@@ -288,7 +482,7 @@ export const PassengerTrackingWeb = () => {
                 <div className="relative h-2 bg-white/5 rounded-full overflow-hidden mb-6 border border-white/10">
                   <motion.div className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#D4AF37]/50 to-[#D4AF37]" initial={{ width: '10%' }} animate={{ width: '85%' }} transition={{ duration: 15, repeat: Infinity, ease: 'linear' }} />
                 </div>
-                <p className="text-gray-400 font-medium mb-6 uppercase text-[10px] tracking-widest">Your chauffeur is ~3 mins away in a {assignedDriver.vehicle}</p>
+                <p className="text-gray-400 font-medium mb-6 uppercase text-[10px] tracking-widest">{rideStatusLabel}</p>
                 <div className="mb-6 p-4 bg-black/40 rounded-xl border border-white/5">
                   <div className="flex items-center justify-center gap-2 mb-3">
                     <Sparkles className="w-4 h-4 text-[#D4AF37]" />
@@ -320,6 +514,28 @@ export const PassengerTrackingWeb = () => {
         </AnimatePresence>
 
         <AnimatePresence>
+          {statusNotice && (
+            <RideStatusToast notice={statusNotice} onClose={() => setStatusNotice(null)} />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
+          {showRideCompletePopup && (
+            <RideCompletePopup
+              driverName={assignedDriver.name}
+              onDone={() => {
+                setShowRideCompletePopup(false);
+                setShowPromo(false);
+                setShowAppPopup(false);
+                setActiveRide(null);
+                setDropOffLocation('');
+                setStep('config');
+              }}
+            />
+          )}
+        </AnimatePresence>
+
+        <AnimatePresence>
           {showAppPopup && (
             <AppDownloadPopup
               variant={appPromoVariant}
@@ -328,13 +544,8 @@ export const PassengerTrackingWeb = () => {
               onSkip={() => {
                 setShowAppPopup(false);
                 const memberNow = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
-                if (appPromoVariant === 'app' && !popupSkippedOnce && !memberNow) {
+                if (appPromoVariant === 'app' && !memberNow) {
                   setPopupSkippedOnce(true);
-                  setTimeout(() => {
-                    if (localStorage.getItem('isMember') === 'true') return;
-                    setAppPromoVariant('membership');
-                    setShowAppPopup(true);
-                  }, 5000);
                 }
               }}
               onMarkHasApp={() => {
@@ -370,6 +581,64 @@ export const PassengerTrackingWeb = () => {
   );
 };
 
+const StatusIcon = ({ icon, className = 'h-5 w-5 text-black' }: { icon: StatusNotice['icon']; className?: string }) => {
+  if (icon === 'car') return <Car className={className} />;
+  if (icon === 'pin') return <MapPin className={className} />;
+  if (icon === 'star') return <Star className={className} fill="currentColor" />;
+  return <Bell className={className} />;
+};
+
+const RideStatusToast = ({ notice, onClose }: { notice: StatusNotice; onClose: () => void }) => (
+  <motion.button
+    type="button"
+    onClick={onClose}
+    initial={{ opacity: 0, y: -18, scale: 0.98 }}
+    animate={{ opacity: 1, y: 0, scale: 1 }}
+    exit={{ opacity: 0, y: -18, scale: 0.98 }}
+    transition={{ type: 'spring', stiffness: 260, damping: 22 }}
+    className="fixed left-4 right-4 top-5 z-[120] mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-[#D4AF37]/45 bg-[#101010]/95 p-4 text-left shadow-2xl shadow-[#D4AF37]/20 backdrop-blur-xl"
+  >
+    <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-[#D4AF37]">
+      <StatusIcon icon={notice.icon} />
+    </span>
+    <span className="min-w-0">
+      <span className="block text-sm font-black text-white">{notice.title}</span>
+      <span className="mt-1 block text-xs font-medium leading-5 text-gray-400">{notice.body}</span>
+    </span>
+  </motion.button>
+);
+
+const RideCompletePopup = ({ driverName, onDone }: { driverName: string; onDone: () => void }) => (
+  <motion.div
+    initial={{ opacity: 0 }}
+    animate={{ opacity: 1 }}
+    exit={{ opacity: 0 }}
+    className="fixed inset-0 z-[110] flex items-center justify-center bg-black/65 p-6 backdrop-blur-sm"
+  >
+    <motion.div
+      initial={{ opacity: 0, scale: 0.92, y: 24 }}
+      animate={{ opacity: 1, scale: 1, y: 0 }}
+      exit={{ opacity: 0, scale: 0.92, y: 24 }}
+      transition={{ type: 'spring', stiffness: 280, damping: 24 }}
+      className="w-full max-w-sm"
+    >
+      <GlassCard className="border-green-500/35 p-8 text-center shadow-2xl shadow-green-500/20">
+        <div className="mx-auto mb-5 flex h-20 w-20 items-center justify-center rounded-full border-4 border-green-500/25 bg-green-500/10">
+          <CheckCircle2 className="h-11 w-11 text-green-500" />
+        </div>
+        <p className="mb-2 text-[10px] font-black uppercase tracking-[0.28em] text-[#D4AF37]">Ride Complete</p>
+        <h3 className="mb-3 text-3xl font-black uppercase italic text-white">Your ride is complete</h3>
+        <p className="mb-8 text-sm font-medium leading-6 text-gray-400">
+          Thanks for riding with Tuxedo. {driverName} has completed your trip.
+        </p>
+        <GoldButton onClick={onDone} className="w-full rounded-2xl py-4 text-base font-black uppercase">
+          Done
+        </GoldButton>
+      </GlassCard>
+    </motion.div>
+  </motion.div>
+);
+
 const AppDownloadPopup = ({
   variant,
   user,
@@ -385,18 +654,10 @@ const AppDownloadPopup = ({
 }) => {
   const navigate = useNavigate();
   const handleDownloadApp = () => {
-    const token = Math.random().toString(36).slice(2, 8).toUpperCase();
     localStorage.setItem(LS_HAS_INSTALLED_APP, 'true');
-    localStorage.setItem(
-      LS_PENDING_RIDE_CREDIT,
-      JSON.stringify({
-        code: `TUX100-${token}`,
-        amount: 100,
-        linkedIdentity: { phone: user?.phone || null, email: user?.email || null },
-        status: 'pending_app_login',
-        issuedAt: new Date().toISOString(),
-      })
-    );
+    if (!localStorage.getItem(LS_PENDING_RIDE_CREDIT)) {
+      createPendingAppOffer(user);
+    }
     window.open('https://apps.apple.com', '_blank');
     onClose();
   };
@@ -417,7 +678,7 @@ const AppDownloadPopup = ({
             <p className="text-sm text-gray-300 font-medium mb-8">toward your next ride each month with membership — $100/mo, credit does not roll over.</p>
             <div className="space-y-3">
               <GoldButton onClick={handleMembership} className="w-full py-4 text-base font-black uppercase">
-                View membership
+                Buy membership
               </GoldButton>
               <button onClick={onSkip ?? onClose} className="w-full py-3 text-sm font-bold text-gray-500 uppercase tracking-widest hover:text-white transition-colors">
                 Not now

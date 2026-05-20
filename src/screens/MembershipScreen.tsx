@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { GlassCard, GoldButton } from '../components/GlassCard';
+import { TuxedoLogo } from '../components/TuxedoLogo';
 import { CheckCircle2, Crown, ArrowLeft, Zap } from 'lucide-react';
 
 export const MembershipScreen = () => {
@@ -22,6 +23,8 @@ export const MembershipScreen = () => {
         <button onClick={() => navigate(-1)} className="text-[#D4AF37] flex items-center gap-2 font-bold mb-4">
           <ArrowLeft className="w-5 h-5" /> Back
         </button>
+
+        <TuxedoLogo className="mx-auto h-10 w-auto" />
 
         <GlassCard className="p-8 text-center border-[#D4AF37]/30">
           <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="mb-6">

@@ -1,6 +1,7 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'motion/react';
 import { GlassCard, GoldButton } from '../components/GlassCard';
+import { TuxedoLogo } from '../components/TuxedoLogo';
 import { mockDrivers, Driver } from '../data/mockDrivers';
 import { useApp } from '../context/AppContext';
 import {
@@ -33,6 +34,7 @@ export const DriverProfileScreen = () => {
           >
             <ArrowLeft className="w-5 h-5" /> Back
           </motion.button>
+          <TuxedoLogo className="h-9 w-auto" />
           {isMember && (
             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-[#D4AF37] text-[10px] font-black uppercase">
               <Wallet className="w-3.5 h-3.5" /> ${user?.rideCredit?.toFixed(2)} Credit
