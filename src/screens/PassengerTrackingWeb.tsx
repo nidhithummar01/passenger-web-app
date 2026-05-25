@@ -181,6 +181,10 @@ export const PassengerTrackingWeb = () => {
   }, [location.state, location.pathname, location.search, navigate, user, setActiveRide, dropOffLocation]);
 
   const isMember = isMemberFlag || user?.isMember === true;
+  const rideCreditLabel =
+    typeof user?.rideCredit === 'number'
+      ? `$${user.rideCredit.toFixed(2)} ride credit`
+      : 'Ride credit active';
   const pickupLocation = deepLinkPickup || reserveMeta.pickup || user?.hotelName || 'The Grand Majestic Hotel';
   const rideStatusLabel =
     rideStatus === 'arrived'
@@ -278,7 +282,7 @@ export const PassengerTrackingWeb = () => {
         JSON.stringify({
           type: 'membership',
           sentAt: new Date().toISOString(),
-          message: 'Buy Tuxedo Gold for $100/month and get $100 toward your next ride.',
+          message: 'Upgrade to Tuxedo Gold for premium perks and ride credit.',
         })
       );
     }, MEMBERSHIP_AFTER_ONBOARD_DELAY_MS);
@@ -565,8 +569,8 @@ export const PassengerTrackingWeb = () => {
                 <Crown className={`w-5 h-5 ${isMember ? 'text-black' : 'text-gray-500'}`} />
               </div>
               <div>
-                <p className="text-[10px] font-black text-white uppercase italic tracking-tight">{isMember ? 'Tuxedo Gold Member' : 'Tuxedo Basic Status'}</p>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{isMember ? `$${user?.rideCredit?.toFixed(2)} ride credit` : '$100/mo · $100 toward your next ride'}</p>
+                <p className="text-[10px] font-black text-white uppercase italic tracking-tight">{isMember ? 'Tuxedo Gold is active' : 'Unlock Tuxedo Gold'}</p>
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{isMember ? rideCreditLabel : 'Ride credit plus premium perks'}</p>
               </div>
             </div>
             {!isMember ? (
@@ -674,8 +678,8 @@ const AppDownloadPopup = ({
               <Crown className="w-8 h-8 text-[#D4AF37]" />
             </div>
             <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest mb-2">Tuxedo Gold</p>
-            <h3 className="text-3xl font-black text-[#D4AF37] mb-1">$100</h3>
-            <p className="text-sm text-gray-300 font-medium mb-8">toward your next ride each month with membership — $100/mo, credit does not roll over.</p>
+            <h3 className="text-3xl font-black text-[#D4AF37] mb-1">$100 Gold</h3>
+            <p className="text-sm text-gray-300 font-medium mb-8">Premium perks and ride credit for your next journey.</p>
             <div className="space-y-3">
               <GoldButton onClick={handleMembership} className="w-full py-4 text-base font-black uppercase">
                 Buy membership

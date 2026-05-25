@@ -24,6 +24,7 @@ export const DriverListScreen = () => {
   const flow = location.state as FlowState | null;
   const { user } = useApp();
   const isMember = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
+  const rideCreditLabel = typeof user?.rideCredit === 'number' ? `$${user.rideCredit.toFixed(2)}` : 'Active';
   const [drivers] = useState<Driver[]>(mockDrivers);
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState({ hotelPreferred: false, verified: true, minRating: 4.5, maxDistance: 5 });
@@ -54,7 +55,7 @@ export const DriverListScreen = () => {
           {isMember && (
             <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} className="flex items-center gap-3 px-4 py-2 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30">
               <Wallet className="w-4 h-4 text-[#D4AF37]" />
-              <span className="text-[10px] text-white font-black uppercase tracking-widest">Credit: ${user?.rideCredit?.toFixed(2)}</span>
+              <span className="text-[10px] text-white font-black uppercase tracking-widest">Credit: {rideCreditLabel}</span>
             </motion.div>
           )}
 

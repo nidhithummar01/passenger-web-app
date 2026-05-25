@@ -19,6 +19,7 @@ export const DriverProfileScreen = () => {
   const location = useLocation();
   const { user } = useApp();
   const isMember = localStorage.getItem('isMember') === 'true' || user?.isMember === true;
+  const rideCreditLabel = typeof user?.rideCredit === 'number' ? `$${user.rideCredit.toFixed(2)} Credit` : 'Credit Active';
   const state = location.state as { driver?: Driver; fromTrackRide?: boolean; paymentMethod?: string | null } | null;
   const driver = state?.driver ?? mockDrivers[0];
 
@@ -37,7 +38,7 @@ export const DriverProfileScreen = () => {
           <TuxedoLogo className="h-9 w-auto" />
           {isMember && (
             <div className="flex items-center gap-2 px-4 py-1.5 rounded-full bg-[#D4AF37]/10 border border-[#D4AF37]/30 text-[#D4AF37] text-[10px] font-black uppercase">
-              <Wallet className="w-3.5 h-3.5" /> ${user?.rideCredit?.toFixed(2)} Credit
+              <Wallet className="w-3.5 h-3.5" /> {rideCreditLabel}
             </div>
           )}
         </div>
