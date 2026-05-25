@@ -7,6 +7,7 @@ import {
   User, Crown, Wallet, ArrowRight, ArrowLeft, Apple, Bell, Star
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
+import { DirectionsRenderer, GoogleMap, MarkerF, useJsApiLoader } from '@react-google-maps/api';
 import { useApp } from '../context/AppContext';
 import { TuxedoLogo } from '../components/TuxedoLogo';
 import type { RideStatus, User as AppUser } from '../types';
@@ -17,6 +18,9 @@ const LS_LAST_SMS_OFFER = 'tuxedoLastSmsOffer';
 const LS_SAVED_PAYMENT_METHOD = 'tuxedoSavedPaymentMethod';
 const APP_DOWNLOAD_POPUP_DELAY_MS = 5000;
 const MEMBERSHIP_AFTER_ONBOARD_DELAY_MS = 30000;
+const GOOGLE_MAPS_API_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
+const FALLBACK_PICKUP = { lat: 40.758, lng: -73.9855 };
+const FALLBACK_DROPOFF = { lat: 40.7614, lng: -73.9776 };
 const RIDE_STATUS_TIMELINE: Array<{ delay: number; status: RideStatus }> = [
   { delay: 0, status: 'arriving' },
   { delay: 15000, status: 'arrived' },
@@ -107,8 +111,10 @@ export const PassengerTrackingWeb = () => {
   const { user, setActiveRide } = useApp();
 
   const deepLinkPickup = searchParams.get('pickup') || '';
+  const defaultPickupLocation = deepLinkPickup || user?.hotelName || 'The Grand Majestic Hotel';
   const isConciergePickup = Boolean(searchParams.get('token'));
   const [step, setStep] = useState<'config' | 'payment' | 'secure-payment' | 'tracking'>('config');
+  const [pickupInput, setPickupInput] = useState(defaultPickupLocation);
   const [dropOffLocation, setDropOffLocation] = useState('');
   const [paymentMethod, setPaymentMethod] = useState<string | null>(null);
   const [showPromo, setShowPromo] = useState(false);
@@ -163,29 +169,37 @@ export const PassengerTrackingWeb = () => {
       setPopupSkippedOnce(false);
       setAppPromoVariant('app');
       setShowAppPopup(false);
-      setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: selectedPaymentMethod, status: 'tracking' }));
+      setActiveRide((prev: any) => ({
+        ...(prev || {}),
+        pickupLocation: pickupInput.trim() || defaultPickupLocation,
+        dropOffLocation,
+        paymentMethod: selectedPaymentMethod,
+        status: 'tracking',
+      }));
       navigate(location.pathname + location.search, { replace: true, state: null });
       return;
     }
 
     if (state.reservedDate) {
+      const reservedPickup = (state.pickupLocation as string | undefined) || defaultPickupLocation;
       setReserveMeta({
         date: state.reservedDate as string,
         time: state.reservedTime as string | undefined,
-        pickup: state.pickupLocation as string | undefined,
+        pickup: reservedPickup,
         serviceType: state.serviceType === 'hourly' ? 'hourly' : 'transfer',
         hourlyHours: typeof state.hourlyHours === 'number' ? state.hourlyHours : undefined,
       });
+      setPickupInput(reservedPickup);
       navigate(location.pathname + location.search, { replace: true, state: null });
     }
-  }, [location.state, location.pathname, location.search, navigate, user, setActiveRide, dropOffLocation]);
+  }, [defaultPickupLocation, location.state, location.pathname, location.search, navigate, user, setActiveRide, pickupInput, dropOffLocation]);
 
   const isMember = isMemberFlag || user?.isMember === true;
   const rideCreditLabel =
     typeof user?.rideCredit === 'number'
       ? `$${user.rideCredit.toFixed(2)} ride credit`
       : 'Ride credit active';
-  const pickupLocation = deepLinkPickup || reserveMeta.pickup || user?.hotelName || 'The Grand Majestic Hotel';
+  const pickupLocation = pickupInput.trim() || reserveMeta.pickup || defaultPickupLocation;
   const rideStatusLabel =
     rideStatus === 'arrived'
       ? 'Your chauffeur has arrived at pickup'
@@ -210,6 +224,7 @@ export const PassengerTrackingWeb = () => {
         setRideStatus(status);
         setActiveRide((prev: any) => ({
           ...(prev || {}),
+          pickupLocation,
           dropOffLocation,
           paymentMethod,
           status,
@@ -222,7 +237,7 @@ export const PassengerTrackingWeb = () => {
     );
 
     return () => timers.forEach(window.clearTimeout);
-  }, [step, setActiveRide, dropOffLocation, paymentMethod]);
+  }, [step, setActiveRide, pickupLocation, dropOffLocation, paymentMethod]);
 
   useEffect(() => {
     if (step !== 'tracking') {
@@ -298,7 +313,7 @@ export const PassengerTrackingWeb = () => {
 
   const handleRequestChauffeur = () => {
     const savedPaymentMethod = getSavedPaymentMethod(user);
-    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod: savedPaymentMethod, status: 'configuring', driverMoving: true }));
+    setActiveRide((prev: any) => ({ ...(prev || {}), pickupLocation, dropOffLocation, paymentMethod: savedPaymentMethod, status: 'configuring', driverMoving: true }));
     if (savedPaymentMethod) {
       setPaymentMethod(savedPaymentMethod);
       setStep('secure-payment');
@@ -321,7 +336,7 @@ export const PassengerTrackingWeb = () => {
     setAppOfferShown(false);
     setMembershipOfferShown(false);
     setAppPromoVariant('app');
-    setActiveRide((prev: any) => ({ ...(prev || {}), dropOffLocation, paymentMethod, status: 'tracking' }));
+    setActiveRide((prev: any) => ({ ...(prev || {}), pickupLocation, dropOffLocation, paymentMethod, status: 'tracking' }));
     setShowAppPopup(false);
     setStep('tracking');
   };
@@ -368,18 +383,31 @@ export const PassengerTrackingWeb = () => {
                     </div>
                   ) : null}
                   <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e] shadow-[0_0_18px_rgba(34,197,94,0.55)]" />
-                      <p className="text-[10px] text-[#D4AF37] uppercase font-black tracking-widest">Pickup</p>
+                    <div className="mb-3 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="h-2.5 w-2.5 rounded-full bg-[#22c55e] shadow-[0_0_18px_rgba(34,197,94,0.55)]" />
+                        <p className="text-[10px] text-[#D4AF37] uppercase font-black tracking-widest">Pickup</p>
+                      </div>
+                      <span className="text-[9px] font-bold uppercase tracking-widest text-gray-600">
+                        {isConciergePickup ? 'Editable' : 'Current location'}
+                      </span>
                     </div>
-                    <p className="text-base text-white font-bold leading-snug">{pickupLocation}</p>
-                    <p className="text-[11px] text-gray-500 mt-1">{isConciergePickup ? 'Set by concierge' : 'Current pickup location'}</p>
+                    <div className="relative">
+                      <Navigation className="absolute left-4 top-1/2 -translate-y-1/2 text-[#22c55e] w-5 h-5" />
+                      <input
+                        type="text"
+                        placeholder="Pickup location"
+                        value={pickupInput}
+                        onChange={(e) => setPickupInput(e.target.value)}
+                        className="w-full rounded-2xl border border-white/10 bg-black/55 py-4 pl-12 pr-4 font-bold text-white outline-none transition placeholder:text-gray-500 focus:border-[#D4AF37]/70 focus:bg-black"
+                      />
+                    </div>
                   </div>
                   <div className="relative">
                     <MapPin className="absolute left-4 top-1/2 -translate-y-1/2 text-[#D4AF37] w-5 h-5" />
                     <input type="text" placeholder="Drop-off location" value={dropOffLocation} onChange={(e) => setDropOffLocation(e.target.value)} className="w-full rounded-2xl border border-white/10 bg-black/55 py-4 pl-12 pr-4 font-bold text-white outline-none transition placeholder:text-gray-500 focus:border-[#D4AF37]/70 focus:bg-black" />
                   </div>
-                  <GoldButton onClick={handleRequestChauffeur} className="mt-2 w-full py-4 text-base uppercase font-black tracking-wide rounded-2xl" disabled={!dropOffLocation}>
+                  <GoldButton onClick={handleRequestChauffeur} className="mt-2 w-full py-4 text-base uppercase font-black tracking-wide rounded-2xl" disabled={!pickupInput.trim() || !dropOffLocation.trim()}>
                     Continue to Ride
                   </GoldButton>
 
@@ -455,7 +483,7 @@ export const PassengerTrackingWeb = () => {
 
           {step === 'tracking' && (
             <motion.div key="tracking" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-4">
-              <DummyMap pickup={pickupLocation} dropoff={dropOffLocation} driverName={assignedDriver.name} />
+              <GoogleTrackingMap pickup={pickupLocation} dropoff={dropOffLocation} driverName={assignedDriver.name} />
               {reserveMeta.date ? (
                 <div className="p-3 rounded-xl border border-[#D4AF37]/25 bg-[#D4AF37]/5 text-center -mt-2">
                   <p className="text-[10px] text-[#D4AF37] font-black uppercase tracking-widest mb-1">Reserved ride</p>
@@ -468,46 +496,105 @@ export const PassengerTrackingWeb = () => {
                   </p>
                 </div>
               ) : null}
-              <GlassCard className="p-8 text-center border-green-500/20">
-                <CheckCircle2 className="w-16 h-16 text-green-500 mx-auto mb-4" />
-                <div className="flex justify-center items-center gap-4 mb-6">
-                  <div className="w-20 h-20 rounded-full border-2 border-[#D4AF37] overflow-hidden bg-gray-900 flex items-center justify-center">
-                    <User className="w-12 h-12 text-gray-700" />
-                  </div>
-                  <div className="w-28 h-16 bg-white/5 rounded-xl border border-white/10 flex items-center justify-center">
-                    <Car className="text-[#D4AF37] opacity-40 w-10 h-10" />
-                  </div>
-                </div>
-                <h2 className="text-2xl font-black mb-1 uppercase italic">{assignedDriver.name}</h2>
-                <div className="flex items-center justify-center gap-1 mb-6">
-                  {[...Array(5)].map((_, i) => (<Sparkles key={i} className="w-3 h-3 text-[#D4AF37]" />))}
-                  <span className="text-[10px] text-[#D4AF37] font-black ml-1 uppercase">{assignedDriver.rating} Rating</span>
-                </div>
-                <div className="relative h-2 bg-white/5 rounded-full overflow-hidden mb-6 border border-white/10">
-                  <motion.div className="absolute inset-y-0 left-0 bg-gradient-to-r from-[#D4AF37]/50 to-[#D4AF37]" initial={{ width: '10%' }} animate={{ width: '85%' }} transition={{ duration: 15, repeat: Infinity, ease: 'linear' }} />
-                </div>
-                <p className="text-gray-400 font-medium mb-6 uppercase text-[10px] tracking-widest">{rideStatusLabel}</p>
-                <div className="mb-6 p-4 bg-black/40 rounded-xl border border-white/5">
-                  <div className="flex items-center justify-center gap-2 mb-3">
-                    <Sparkles className="w-4 h-4 text-[#D4AF37]" />
-                    <span className="text-[10px] font-black uppercase text-gray-500 tracking-tighter">Premium Amenities</span>
-                  </div>
-                  {hasPremiumAmenities ? (
-                    <div className="flex flex-wrap justify-center gap-2">
-                      {assignedDriver.amenities.map(a => (<span key={a} className="text-[10px] font-bold bg-[#D4AF37]/10 text-[#D4AF37] px-2 py-1 rounded border border-[#D4AF37]/20">{a}</span>))}
+              <GlassCard className="relative overflow-hidden border-[#D4AF37]/30 bg-[radial-gradient(circle_at_top_left,rgba(212,175,55,0.22),transparent_32%),linear-gradient(145deg,rgba(255,255,255,0.08),rgba(255,255,255,0.025))] p-0 shadow-2xl shadow-[#D4AF37]/10">
+                <div className="absolute -right-16 -top-20 h-44 w-44 rounded-full bg-[#D4AF37]/10 blur-3xl" />
+                <div className="absolute -bottom-24 -left-20 h-52 w-52 rounded-full bg-white/5 blur-3xl" />
+
+                <div className="relative p-5">
+                  <div className="mb-5 flex items-center justify-between">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-green-500/25 bg-green-500/10 px-3 py-1.5">
+                      <CheckCircle2 className="h-4 w-4 text-green-400" />
+                      <span className="text-[10px] font-black uppercase tracking-[0.18em] text-green-300">Chauffeur confirmed</span>
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <p className="text-[9px] font-black text-gray-600 uppercase">Premium amenities locked</p>
-                      <button onClick={() => navigate('/membership', { state: { fromTrackRide: true, paymentMethod } })} className="flex items-center justify-center gap-2 w-full py-2 bg-white/5 rounded-lg border border-dashed border-white/20 group hover:border-[#D4AF37]/40 transition-colors">
-                        <Lock className="w-3 h-3 text-gray-600 group-hover:text-[#D4AF37]" />
-                        <span className="text-[9px] font-black text-gray-600 uppercase group-hover:text-[#D4AF37]">Buy Membership</span>
-                      </button>
+                    <div className="rounded-full border border-[#D4AF37]/30 bg-[#D4AF37]/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-[#D4AF37]">
+                      ~3 min
                     </div>
-                  )}
+                  </div>
+
+                  <div className="grid grid-cols-[1fr_auto] gap-4">
+                    <div className="min-w-0">
+                      <p className="mb-1 text-[10px] font-black uppercase tracking-[0.22em] text-[#D4AF37]">Your chauffeur</p>
+                      <h2 className="truncate text-3xl font-black uppercase italic tracking-tight text-white">{assignedDriver.name}</h2>
+                      <div className="mt-2 flex items-center gap-2">
+                        <div className="flex items-center gap-0.5">
+                          {[...Array(5)].map((_, i) => (
+                            <Star key={i} className="h-3.5 w-3.5 fill-[#D4AF37] text-[#D4AF37]" />
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-black uppercase text-[#D4AF37]">{assignedDriver.rating}</span>
+                        <span className="text-[10px] font-bold uppercase text-gray-500">Elite rated</span>
+                      </div>
+                    </div>
+
+                    <div className="relative">
+                      <div className="h-20 w-20 rounded-3xl border border-[#D4AF37]/45 bg-gradient-to-br from-[#D4AF37]/25 to-white/[0.03] p-1 shadow-[0_0_35px_rgba(212,175,55,0.18)]">
+                        <div className="flex h-full w-full items-center justify-center rounded-[20px] bg-[#10131a] text-2xl font-black text-[#D4AF37]">
+                          {assignedDriver.name.split(' ').map(part => part[0]).join('').slice(0, 2)}
+                        </div>
+                      </div>
+                      <div className="absolute -bottom-1 -right-1 rounded-full border-2 border-black bg-green-500 p-1">
+                        <CheckCircle2 className="h-3.5 w-3.5 text-black" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mt-6 rounded-3xl border border-white/10 bg-black/45 p-4">
+                    <div className="flex items-center justify-between gap-4">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-14 w-20 items-center justify-center rounded-2xl border border-[#D4AF37]/25 bg-[#D4AF37]/10">
+                          <Car className="h-8 w-8 text-[#D4AF37]" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-black text-white">{assignedDriver.vehicle}</p>
+                          <p className="mt-1 text-[10px] font-bold uppercase tracking-widest text-gray-500">Luxury sedan</p>
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2 text-right">
+                        <p className="text-[9px] font-black uppercase tracking-widest text-gray-500">Plate</p>
+                        <p className="text-xs font-black tracking-[0.18em] text-white">TUX-204</p>
+                      </div>
+                    </div>
+
+                    <div className="mt-5">
+                      <div className="mb-2 flex items-center justify-between text-[10px] font-black uppercase tracking-widest">
+                        <span className="text-gray-500">Arrival progress</span>
+                        <span className="text-[#D4AF37]">En route</span>
+                      </div>
+                      <div className="relative h-2 overflow-hidden rounded-full border border-white/10 bg-white/5">
+                        <motion.div className="absolute inset-y-0 left-0 rounded-full bg-gradient-to-r from-[#8e7119] via-[#D4AF37] to-[#fff2b8]" initial={{ width: '14%' }} animate={{ width: '78%' }} transition={{ duration: 14, repeat: Infinity, ease: 'linear' }} />
+                      </div>
+                      <p className="mt-3 text-center text-[11px] font-black uppercase tracking-[0.16em] text-gray-400">{rideStatusLabel}</p>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 rounded-3xl border border-[#D4AF37]/20 bg-[#D4AF37]/[0.06] p-4">
+                    <div className="mb-3 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Sparkles className="h-4 w-4 text-[#D4AF37]" />
+                        <span className="text-[10px] font-black uppercase tracking-[0.18em] text-[#D4AF37]">Premium amenities</span>
+                      </div>
+                      <span className="text-[9px] font-black uppercase tracking-widest text-gray-500">{hasPremiumAmenities ? 'Unlocked' : 'Gold only'}</span>
+                    </div>
+                    {hasPremiumAmenities ? (
+                      <div className="grid grid-cols-2 gap-2">
+                        {assignedDriver.amenities.map(a => (
+                          <span key={a} className="rounded-xl border border-[#D4AF37]/20 bg-black/35 px-3 py-2 text-center text-[10px] font-black uppercase text-[#D4AF37]">{a}</span>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-2xl border border-dashed border-white/15 bg-black/35 p-3">
+                        <p className="mb-3 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500">Upgrade to unlock Wi-Fi, water, TV / AUX and chauffeur choice.</p>
+                        <button onClick={() => navigate('/membership', { state: { fromTrackRide: true, paymentMethod } })} className="group flex w-full items-center justify-center gap-2 rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 py-3 text-[10px] font-black uppercase tracking-widest text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-black">
+                          <Lock className="h-3.5 w-3.5" />
+                          Unlock Gold perks
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 </div>
+
                 {showPromo && (
-                  <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mt-4 p-4 bg-[#D4AF37]/10 border-2 border-dashed border-[#D4AF37]/40 rounded-xl">
+                  <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="mx-5 mb-5 rounded-2xl border-2 border-dashed border-[#D4AF37]/40 bg-[#D4AF37]/10 p-4 text-center">
                     <Gift className="w-5 h-5 inline mr-2 text-[#D4AF37]" />
                     <span className="text-[#D4AF37] font-black uppercase text-xs">20% Off Your Next Journey!</span>
                   </motion.div>
@@ -724,36 +811,150 @@ const AppDownloadPopup = ({
   );
 };
 
-const DummyMap = ({ pickup, dropoff, driverName }: { pickup: string; dropoff: string; driverName: string }) => {
+const GOOGLE_MAP_STYLE = [
+  { elementType: 'geometry', stylers: [{ color: '#080808' }] },
+  { elementType: 'labels.text.fill', stylers: [{ color: '#d7d7d7' }] },
+  { elementType: 'labels.text.stroke', stylers: [{ color: '#080808' }] },
+  { featureType: 'administrative', elementType: 'geometry.stroke', stylers: [{ color: '#2f2f2f' }] },
+  { featureType: 'landscape', elementType: 'geometry', stylers: [{ color: '#0f0f0f' }] },
+  { featureType: 'poi', stylers: [{ visibility: 'off' }] },
+  { featureType: 'road', elementType: 'geometry', stylers: [{ color: '#242424' }] },
+  { featureType: 'road', elementType: 'geometry.stroke', stylers: [{ color: '#101010' }] },
+  { featureType: 'road.highway', elementType: 'geometry', stylers: [{ color: '#3a3320' }] },
+  { featureType: 'transit', stylers: [{ visibility: 'off' }] },
+  { featureType: 'water', elementType: 'geometry', stylers: [{ color: '#05070b' }] },
+];
+
+type MapPoint = { lat: number; lng: number };
+
+function geocodeAddress(address: string, fallback: MapPoint): Promise<MapPoint> {
+  const googleApi = (window as any).google;
+  if (!address.trim() || !googleApi?.maps?.Geocoder) return Promise.resolve(fallback);
+
+  return new Promise((resolve) => {
+    const geocoder = new googleApi.maps.Geocoder();
+    geocoder.geocode({ address }, (results: any[], status: string) => {
+      if (status === 'OK' && results?.[0]?.geometry?.location) {
+        const location = results[0].geometry.location;
+        resolve({ lat: location.lat(), lng: location.lng() });
+        return;
+      }
+      resolve(fallback);
+    });
+  });
+}
+
+const GoogleTrackingMap = ({ pickup, dropoff, driverName }: { pickup: string; dropoff: string; driverName: string }) => {
   const [progress, setProgress] = React.useState(0.15);
+  const [pickupPoint, setPickupPoint] = React.useState<MapPoint>(FALLBACK_PICKUP);
+  const [dropoffPoint, setDropoffPoint] = React.useState<MapPoint>(FALLBACK_DROPOFF);
+  const [directions, setDirections] = React.useState<any>(null);
+  const { isLoaded, loadError } = useJsApiLoader({
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
+  });
+
   React.useEffect(() => {
-    const interval = setInterval(() => { setProgress(p => (p >= 0.88 ? 0.15 : p + 0.004)); }, 80);
+    const interval = setInterval(() => {
+      setProgress((p) => (p >= 0.88 ? 0.15 : p + 0.004));
+    }, 80);
     return () => clearInterval(interval);
   }, []);
-  const W = 340, H = 200, startX = 48, startY = 160, endX = 292, endY = 48, cp1X = 100, cp1Y = 60, cp2X = 240, cp2Y = 170;
-  const bezier = (t: number) => { const mt = 1 - t; return { x: mt*mt*mt*startX + 3*mt*mt*t*cp1X + 3*mt*t*t*cp2X + t*t*t*endX, y: mt*mt*mt*startY + 3*mt*mt*t*cp1Y + 3*mt*t*t*cp2Y + t*t*t*endY }; };
-  const carPos = bezier(progress);
-  const gridLines: React.ReactElement[] = [];
-  for (let x = 0; x <= W; x += 40) gridLines.push(<line key={`v${x}`} x1={x} y1={0} x2={x} y2={H} stroke="#1a1a1a" strokeWidth="1" />);
-  for (let y = 0; y <= H; y += 40) gridLines.push(<line key={`h${y}`} x1={0} y1={y} x2={W} y2={y} stroke="#1a1a1a" strokeWidth="1" />);
+
+  React.useEffect(() => {
+    if (!isLoaded || !(window as any).google) return;
+
+    let cancelled = false;
+    const googleApi = (window as any).google;
+
+    async function loadRoute() {
+      const nextPickup = await geocodeAddress(pickup, FALLBACK_PICKUP);
+      const nextDropoff = await geocodeAddress(dropoff, FALLBACK_DROPOFF);
+      if (cancelled) return;
+
+      setPickupPoint(nextPickup);
+      setDropoffPoint(nextDropoff);
+
+      const directionsService = new googleApi.maps.DirectionsService();
+      directionsService.route(
+        {
+          origin: nextPickup,
+          destination: nextDropoff,
+          travelMode: googleApi.maps.TravelMode.DRIVING,
+        },
+        (result: any, status: string) => {
+          if (cancelled) return;
+          setDirections(status === 'OK' ? result : null);
+        },
+      );
+    }
+
+    loadRoute();
+    return () => {
+      cancelled = true;
+    };
+  }, [dropoff, isLoaded, pickup]);
+
+  if (!GOOGLE_MAPS_API_KEY || loadError || !isLoaded) {
+    return <GoogleMapsEmbed pickup={pickup} dropoff={dropoff} driverName={driverName} />;
+  }
+
+  const driverPoint = {
+    lat: pickupPoint.lat + (dropoffPoint.lat - pickupPoint.lat) * progress,
+    lng: pickupPoint.lng + (dropoffPoint.lng - pickupPoint.lng) * progress,
+  };
+
   return (
     <div className="rounded-2xl overflow-hidden border-2 border-[#D4AF37]/20 bg-[#0a0a0a]">
       <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
-        <div className="flex items-center gap-2"><Navigation className="w-3.5 h-3.5 text-[#D4AF37] animate-pulse" /><span className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">Live Tracking</span></div>
-        <span className="text-[9px] text-gray-600 font-bold uppercase">Simulation</span>
+        <div className="flex items-center gap-2">
+          <Navigation className="w-3.5 h-3.5 text-[#D4AF37] animate-pulse" />
+          <span className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">Live Tracking</span>
+        </div>
+        <span className="text-[9px] text-[#D4AF37] font-bold uppercase">Google Map</span>
       </div>
-      <div className="relative">
-        <svg width="100%" viewBox={`0 0 ${W} ${H}`} className="block">
-          {gridLines}
-          {[[80,40,60,50],[160,30,50,60],[240,50,55,45],[70,120,65,55],[155,110,50,60],[235,115,60,50]].map(([x,y,w,h],i) => (<rect key={i} x={x} y={y} width={w} height={h} rx="4" fill="#111" stroke="#1f1f1f" strokeWidth="1" />))}
-          <path d={`M ${startX} ${startY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${endX} ${endY}`} fill="none" stroke="#D4AF37" strokeWidth="2" strokeDasharray="6 4" opacity="0.3" />
-          <path d={`M ${startX} ${startY} C ${cp1X} ${cp1Y}, ${cp2X} ${cp2Y}, ${endX} ${endY}`} fill="none" stroke="#D4AF37" strokeWidth="2.5" strokeDasharray={`${progress * 420} 999`} />
-          <circle cx={startX} cy={startY} r="7" fill="#22c55e" opacity="0.9" /><circle cx={startX} cy={startY} r="3" fill="#fff" />
-          <circle cx={endX} cy={endY} r="7" fill="#ef4444" opacity="0.9" /><circle cx={endX} cy={endY} r="3" fill="#fff" />
-          <circle cx={carPos.x} cy={carPos.y} r="10" fill="#D4AF37" opacity="0.15" /><circle cx={carPos.x} cy={carPos.y} r="6" fill="#D4AF37" /><circle cx={carPos.x} cy={carPos.y} r="3" fill="#000" />
-        </svg>
-        <div className="absolute bottom-2 left-3 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-green-500" /><span className="text-[9px] text-gray-400 font-bold max-w-[80px] truncate">{pickup || 'Pickup'}</span></div>
-        <div className="absolute top-2 right-3 flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-red-500" /><span className="text-[9px] text-gray-400 font-bold max-w-[80px] truncate">{dropoff || 'Dropoff'}</span></div>
+      <div className="relative h-[220px]">
+        <GoogleMap
+          mapContainerStyle={{ width: '100%', height: '100%' }}
+          center={driverPoint}
+          zoom={13}
+          options={{
+            backgroundColor: '#050505',
+            clickableIcons: false,
+            disableDefaultUI: true,
+            fullscreenControl: false,
+            gestureHandling: 'greedy',
+            keyboardShortcuts: false,
+            mapTypeControl: false,
+            streetViewControl: false,
+            styles: GOOGLE_MAP_STYLE,
+            zoomControl: true,
+          }}
+        >
+          {directions ? (
+            <DirectionsRenderer
+              directions={directions}
+              options={{
+                polylineOptions: {
+                  strokeColor: '#D4AF37',
+                  strokeOpacity: 0.95,
+                  strokeWeight: 5,
+                },
+                suppressMarkers: true,
+              }}
+            />
+          ) : null}
+          <MarkerF position={pickupPoint} label={{ text: 'P', color: '#000', fontWeight: '900' }} />
+          <MarkerF position={dropoffPoint} label={{ text: 'D', color: '#000', fontWeight: '900' }} />
+          <MarkerF position={driverPoint} label={{ text: '•', color: '#000', fontWeight: '900' }} />
+        </GoogleMap>
+        <div className="pointer-events-none absolute bottom-2 left-3 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 backdrop-blur">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-[9px] text-gray-300 font-bold max-w-[92px] truncate">{pickup || 'Pickup'}</span>
+        </div>
+        <div className="pointer-events-none absolute top-2 right-3 flex items-center gap-1 rounded-full bg-black/60 px-2 py-1 backdrop-blur">
+          <div className="w-2 h-2 rounded-full bg-red-500" />
+          <span className="text-[9px] text-gray-300 font-bold max-w-[92px] truncate">{dropoff || 'Dropoff'}</span>
+        </div>
       </div>
       <div className="flex items-center justify-between px-4 py-2 border-t border-white/5">
         <div className="flex items-center gap-2"><Car className="w-3.5 h-3.5 text-[#D4AF37]" /><span className="text-[9px] text-gray-400 font-bold">{driverName} en route</span></div>
@@ -763,6 +964,43 @@ const DummyMap = ({ pickup, dropoff, driverName }: { pickup: string; dropoff: st
   );
 };
 
+const GoogleMapsEmbed = ({ pickup, dropoff, driverName }: { pickup: string; dropoff: string; driverName: string }) => {
+  const encodedPickup = encodeURIComponent(pickup || 'The Grand Majestic Hotel');
+  const encodedDropoff = encodeURIComponent(dropoff || pickup || 'Ahmedabad');
+  const mapSrc = `https://www.google.com/maps?output=embed&saddr=${encodedPickup}&daddr=${encodedDropoff}`;
 
-
+  return (
+    <div className="rounded-2xl overflow-hidden border-2 border-[#D4AF37]/20 bg-[#0a0a0a]">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5">
+        <div className="flex items-center gap-2">
+          <Navigation className="w-3.5 h-3.5 text-[#D4AF37] animate-pulse" />
+          <span className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest">Live Tracking</span>
+        </div>
+        <span className="text-[9px] text-[#D4AF37] font-bold uppercase">Google Map</span>
+      </div>
+      <div className="relative h-[220px] bg-black">
+        <iframe
+          title="Google ride tracking map"
+          src={mapSrc}
+          className="h-full w-full border-0 grayscale-[0.15] invert-0"
+          loading="lazy"
+          referrerPolicy="no-referrer-when-downgrade"
+          allowFullScreen
+        />
+        <div className="pointer-events-none absolute bottom-2 left-3 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 backdrop-blur">
+          <div className="w-2 h-2 rounded-full bg-green-500" />
+          <span className="text-[9px] text-gray-100 font-bold max-w-[92px] truncate">{pickup || 'Pickup'}</span>
+        </div>
+        <div className="pointer-events-none absolute top-2 right-3 flex items-center gap-1 rounded-full bg-black/70 px-2 py-1 backdrop-blur">
+          <div className="w-2 h-2 rounded-full bg-red-500" />
+          <span className="text-[9px] text-gray-100 font-bold max-w-[92px] truncate">{dropoff || 'Dropoff'}</span>
+        </div>
+      </div>
+      <div className="flex items-center justify-between px-4 py-2 border-t border-white/5">
+        <div className="flex items-center gap-2"><Car className="w-3.5 h-3.5 text-[#D4AF37]" /><span className="text-[9px] text-gray-400 font-bold">{driverName} en route</span></div>
+        <div className="flex items-center gap-1"><div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] animate-pulse" /><span className="text-[9px] text-[#D4AF37] font-black uppercase">Live</span></div>
+      </div>
+    </div>
+  );
+};
 
