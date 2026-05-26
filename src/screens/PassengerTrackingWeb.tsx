@@ -19,6 +19,7 @@ const LS_SAVED_PAYMENT_METHOD = 'tuxedoSavedPaymentMethod';
 const APP_DOWNLOAD_POPUP_DELAY_MS = 5000;
 const MEMBERSHIP_AFTER_ONBOARD_DELAY_MS = 30000;
 const GOOGLE_MAPS_API_KEY = (import.meta.env.VITE_GOOGLE_MAPS_API_KEY as string | undefined)?.trim();
+const DEFAULT_US_PICKUP = 'Times Square, New York, NY, USA';
 const FALLBACK_PICKUP = { lat: 40.758, lng: -73.9855 };
 const FALLBACK_DROPOFF = { lat: 40.7614, lng: -73.9776 };
 const RIDE_STATUS_TIMELINE: Array<{ delay: number; status: RideStatus }> = [
@@ -111,7 +112,7 @@ export const PassengerTrackingWeb = () => {
   const { user, setActiveRide } = useApp();
 
   const deepLinkPickup = searchParams.get('pickup') || '';
-  const defaultPickupLocation = deepLinkPickup || user?.hotelName || 'The Grand Majestic Hotel';
+  const defaultPickupLocation = deepLinkPickup || DEFAULT_US_PICKUP;
   const isConciergePickup = Boolean(searchParams.get('token'));
   const [step, setStep] = useState<'config' | 'payment' | 'secure-payment' | 'tracking'>('config');
   const [pickupInput, setPickupInput] = useState(defaultPickupLocation);
@@ -965,7 +966,7 @@ const GoogleTrackingMap = ({ pickup, dropoff, driverName }: { pickup: string; dr
 };
 
 const GoogleMapsEmbed = ({ pickup, dropoff, driverName }: { pickup: string; dropoff: string; driverName: string }) => {
-  const encodedPickup = encodeURIComponent(pickup || 'The Grand Majestic Hotel');
+  const encodedPickup = encodeURIComponent(pickup || DEFAULT_US_PICKUP);
   const encodedDropoff = encodeURIComponent(dropoff || pickup || 'Ahmedabad');
   const mapSrc = `https://www.google.com/maps?output=embed&saddr=${encodedPickup}&daddr=${encodedDropoff}`;
 
