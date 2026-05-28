@@ -298,7 +298,7 @@ export const PassengerTrackingWeb = () => {
         JSON.stringify({
           type: 'membership',
           sentAt: new Date().toISOString(),
-          message: 'Upgrade to Tuxedo Gold for premium perks and ride credit.',
+          message: 'Upgrade to Tuxedo Gold for premium amenities and ride credit.',
         })
       );
     }, MEMBERSHIP_AFTER_ONBOARD_DELAY_MS);
@@ -587,7 +587,7 @@ export const PassengerTrackingWeb = () => {
                         <p className="mb-3 text-center text-[10px] font-bold uppercase tracking-widest text-gray-500">Upgrade to unlock Wi-Fi, water, TV / AUX and chauffeur choice.</p>
                         <button onClick={() => navigate('/membership', { state: { fromTrackRide: true, paymentMethod } })} className="group flex w-full items-center justify-center gap-2 rounded-xl border border-[#D4AF37]/30 bg-[#D4AF37]/10 py-3 text-[10px] font-black uppercase tracking-widest text-[#D4AF37] transition hover:bg-[#D4AF37] hover:text-black">
                           <Lock className="h-3.5 w-3.5" />
-                          Unlock Gold perks
+                          Unlock Gold amenities
                         </button>
                       </div>
                     )}
@@ -658,7 +658,7 @@ export const PassengerTrackingWeb = () => {
               </div>
               <div>
                 <p className="text-[10px] font-black text-white uppercase italic tracking-tight">{isMember ? 'Tuxedo Gold is active' : 'Unlock Tuxedo Gold'}</p>
-                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{isMember ? rideCreditLabel : 'Ride credit plus premium perks'}</p>
+                <p className="text-[9px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">{isMember ? rideCreditLabel : 'Ride credit plus premium amenities'}</p>
               </div>
             </div>
             {!isMember ? (
@@ -767,7 +767,7 @@ const AppDownloadPopup = ({
             </div>
             <p className="text-[10px] font-black text-[#D4AF37] uppercase tracking-widest mb-2">Tuxedo Gold</p>
             <h3 className="text-3xl font-black text-[#D4AF37] mb-1">$100 Gold</h3>
-            <p className="text-sm text-gray-300 font-medium mb-8">Premium perks and ride credit for your next journey.</p>
+            <p className="text-sm text-gray-300 font-medium mb-8">Premium amenities and ride credit for your next journey.</p>
             <div className="space-y-3">
               <GoldButton onClick={handleMembership} className="w-full py-4 text-base font-black uppercase">
                 Buy membership
