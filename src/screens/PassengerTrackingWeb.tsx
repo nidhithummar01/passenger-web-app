@@ -9,6 +9,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { DirectionsRenderer, GoogleMap, MarkerF, useJsApiLoader } from '@react-google-maps/api';
 import { useApp } from '../context/AppContext';
+import { useSMSJourney } from '../context/SMSJourneyContext';
 import { TuxedoLogo } from '../components/TuxedoLogo';
 import type { RideStatus, User as AppUser } from '../types';
 
@@ -110,6 +111,7 @@ export const PassengerTrackingWeb = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user, setActiveRide } = useApp();
+  const { triggerSMS } = useSMSJourney();
 
   const deepLinkPickup = searchParams.get('pickup') || '';
   const defaultPickupLocation = deepLinkPickup || DEFAULT_US_PICKUP;
@@ -340,7 +342,34 @@ export const PassengerTrackingWeb = () => {
     setActiveRide((prev: any) => ({ ...(prev || {}), pickupLocation, dropOffLocation, paymentMethod, status: 'tracking' }));
     setShowAppPopup(false);
     setStep('tracking');
+    // SMS 1 — Welcome immediately on booking
+    triggerSMS(1);
+    // SMS 2 — Driver on the way, 9s later (after SMS 1 fully shown & dismissed)
+    setTimeout(() => triggerSMS(2), 9000);
   };
+
+  // Auto-trigger SMS based on ride status changes — each delayed so they never overlap
+  useEffect(() => {
+    if (!rideStatus) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+    if (rideStatus === 'arriving') {
+      // SMS 3 — App offer, 22s after arriving (well after SMS 2 clears)
+      timers.push(setTimeout(() => triggerSMS(3), 22000));
+    }
+    if (rideStatus === 'arrived') {
+      // SMS 4 — Driver arrived, 10s delay so it doesn't clash with SMS 3
+      timers.push(setTimeout(() => triggerSMS(4), 10000));
+    }
+    if (rideStatus === 'onboard') {
+      // SMS 5 — Membership, 8s into onboard
+      timers.push(setTimeout(() => triggerSMS(5), 8000));
+    }
+    if (rideStatus === 'completed') {
+      // SMS 6 — Thank you, 4s after completed
+      timers.push(setTimeout(() => triggerSMS(6), 4000));
+    }
+    return () => timers.forEach(clearTimeout);
+  }, [rideStatus, triggerSMS]);
 
 
   return (
